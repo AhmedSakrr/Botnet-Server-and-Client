@@ -21,6 +21,7 @@
 #include <map>
 #include <vector>
 #include <list>
+#include <cstring>
 
 #include <iostream>
 #include <sstream>
@@ -163,31 +164,47 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds,
     if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
         std::string group = tokens[1];
+        std::string not_implemented_msg = "Not implemented yet\n";
+        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+            perror("Failed to send message to client");
+        }
         // TODO: Implement FETCH command
     }
     else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
     {
         std::string group = tokens[1];
         std::string message = tokens[2];
+        std::string not_implemented_msg = "Not implemented yet\n";
+        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+            perror("Failed to send message to client");
+        }
         //TODO: Implement SEND command
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        std::cout << "Who is logged on" << std::endl;
-        std::string msg;
-
-        for (auto const &names : clients)
-        {
-            msg += names.second->name + ",";
+        std::string not_implemented_msg = "Not implemented yet\n";
+        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+            perror("Failed to send message to client");
         }
-        // Reducing the msg length by 1 loses the excess "," - which
-        // granted is totally cheating.
-        send(clientSocket, msg.c_str(), msg.length() - 1, 0);
+        // std::cout << "Who is logged on" << std::endl;
+        // std::string msg;
+
+        // for (auto const &names : clients)
+        // {
+        //     msg += names.second->name + ",";
+        // }
+        // // Reducing the msg length by 1 loses the excess "," - which
+        // // granted is totally cheating.
+        // send(clientSocket, msg.c_str(), msg.length() - 1, 0);
     }
     // This is slightly fragile, since it's relying on the order
     // of evaluation of the if statement.
     else
     {
+        std::string not_implemented_msg = "Command not recognized\n";
+        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+            perror("Failed to send message to client");
+        }
         std::cout << "Unknown command from client:" << buffer << std::endl;
     }
 }

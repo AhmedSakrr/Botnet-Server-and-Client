@@ -36,19 +36,18 @@
 
         while(true)
         {
-        memset(buffer, 0, sizeof(buffer));
-        nread = read(serverSocket, buffer, sizeof(buffer));
+            memset(buffer, 0, sizeof(buffer));
+            nread = read(serverSocket, buffer, sizeof(buffer));
 
-        if(nread == 0)                      // Server has dropped us
-        {
-            printf("Over and Out\n");
-            exit(0);
-        }
-        else if(nread > 0)
-        {
-            printf("%s\n", buffer);
-        }
-        printf("here\n");
+            if(nread == 0)                      // Server has dropped us
+            {
+                printf("Over and Out\n");
+                exit(0);
+            }
+            else if(nread > 0)
+            {
+                printf("\n%s\n", buffer);
+            }
         }
     }
 
