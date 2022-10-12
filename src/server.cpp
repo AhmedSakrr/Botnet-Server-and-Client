@@ -60,6 +60,8 @@
 
 #define BACKLOG 5 // Allowed length of queue of waiting connections
 
+using namespace std;
+
 // Simple class for handling connections from clients.
 //
 // Client(int socket) - socket to send/receive traffic from client.
@@ -67,7 +69,7 @@ class Client
 {
 public:
     int sock;         // socket of client connection
-    std::string name; // Limit length of name of client's user
+    string name; // Limit length of name of client's user
 
     Client(int socket) : sock(socket) {}
 
@@ -81,7 +83,7 @@ public:
 // Quite often a simple array can be used as a lookup table,
 // (indexed on socket no.) sacrificing memory for speed.
 
-std::map<int, Client *> clients; // Lookup table for per Client information
+map<int, Client *> clients; // Lookup table for per Client information
 
 // Open socket for specified port.
 //
@@ -160,7 +162,7 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
     {
         for (auto const &p : clients)
         {
-            *maxfds = std::max(*maxfds, p.second->sock);
+            *maxfds = max(*maxfds, p.second->sock);
         }
     }
 
@@ -174,8 +176,10 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
 
-    std::vector<std::string> tokens;
+    vector<string> tokens;
     char *token = strtok(buffer, ",");
+
+    string a(buffer);
 
     while (token != NULL)
     {
@@ -184,12 +188,12 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
         token = strtok(NULL, ",");
     }
 
-    std::string group_prefix = "P3_GROUP_";
+    string group_prefix = "P3_GROUP_";
 
     if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
-        std::string group = tokens[1];
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        string group = tokens[1];
+        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -198,9 +202,9 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
     {
-        std::string group = tokens[1];
-        std::string message = tokens[2];
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        string group = tokens[1];
+        string message = tokens[2];
+        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -209,7 +213,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -217,7 +221,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else
     {
-        std::string not_implemented_msg = "SERVER: Command not recognized\n";
+        string not_implemented_msg = "SERVER: Command not recognized\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -290,7 +294,7 @@ int main(int argc, char *argv[])
                 FD_SET(clientSock, &openSockets);
 
                 // And update the maximum file descriptor
-                maxfds = std::max(maxfds, clientSock);
+                maxfds = max(maxfds, clientSock);
 
                 // create a new client to store information.
                 clients[clientSock] = new Client(clientSock);
@@ -301,7 +305,7 @@ int main(int argc, char *argv[])
                 printf("Client connected on server: %d\n", clientSock);
             }
             // Now check for commands from clients
-            std::list<Client *> disconnectedClients;
+            list<Client *> disconnectedClients;
             while (n-- > 0)
             {
                 for (auto const &pair : clients)
@@ -320,7 +324,7 @@ int main(int argc, char *argv[])
                         // only triggers if there is something on the socket for us.
                         else
                         {
-                            std::cout << buffer << std::endl;
+                            cout << buffer << endl;
                             clientCommand(client->sock, &openSockets, &maxfds, buffer);
                         }
                     }

@@ -61,6 +61,10 @@ bool sendClientCommand(int serverSocket, char *buffer)
     vector<string> tokens;
     string token;
 
+    if (buffer.find(",") != std::string::npos) {
+    std::cout << "found!" << '\n';
+}
+
     // Split command from client into tokens for parsing
     boost::split(tokens, buffer, boost::is_any_of(","));
 
@@ -72,17 +76,17 @@ bool sendClientCommand(int serverSocket, char *buffer)
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
     string group_prefix = "P3_GROUP_";
 
-    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
+    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) 
     {
         printf("CLIENT: Command FETCH recognized\n");
         command_is_correct = true;
     }
-    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
+    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) 
     {
         printf("CLIENT: Command SEND recognized\n");
         command_is_correct = true;
     }
-    else if (tokens[0].compare("QUERYSERVERS") == 0) // syntax QUERYSERVERS
+    else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
         // TODO: For now, it only works if you write "QUERYSERVERS,"
         printf("CLIENT: Command QUERYSERVERS recognized\n");
