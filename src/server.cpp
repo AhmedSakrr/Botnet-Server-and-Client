@@ -30,6 +30,30 @@
 
 #include <unistd.h>
 
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <string.h>
+#include <algorithm>
+#include <map>
+#include <vector>
+#include <thread>
+
+#include <iostream>
+#include <sstream>
+#include <thread>
+#include <map>
+
+#include <bits/stdc++.h>
+
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
@@ -149,41 +173,56 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
 // Process command from client on the server
 
-void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds,
-                   char *buffer)
+void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
+    printf("Buffer contains %s\n", buffer);
+
+    printf("Inside clientCommand\n");
+
     std::vector<std::string> tokens;
-    std::string token;
+    char *token = strtok(buffer, ",");
 
-    // Split command from client into tokens for parsing
-    std::stringstream stream(buffer);
+    std::cout << "The buffer contains: " << buffer << std::endl;
 
-    while (stream >> token)
+    printf("Before while tokenizer\n");
+    while (token != NULL)
+    {
+        printf("Insie the while: %s\n", token);
         tokens.push_back(token);
 
-    if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2)) // syntax: FETCH GROUPID
+        token = strtok(NULL, ",");
+    }
+
+    std::string group_prefix = "P3_GROUP_";
+
+    printf("Before the first if\n");
+    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
+        printf("Inside the FETCH if\n");
         std::string group = tokens[1];
-        std::string not_implemented_msg = "Not implemented yet\n";
-        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        {
             perror("Failed to send message to client");
         }
         // TODO: Implement FETCH command
     }
-    else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
+    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
     {
         std::string group = tokens[1];
         std::string message = tokens[2];
-        std::string not_implemented_msg = "Not implemented yet\n";
-        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        {
             perror("Failed to send message to client");
         }
-        //TODO: Implement SEND command
+        // TODO: Implement SEND command
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        std::string not_implemented_msg = "Not implemented yet\n";
-        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        {
             perror("Failed to send message to client");
         }
         // std::cout << "Who is logged on" << std::endl;
@@ -197,16 +236,18 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds,
         // // granted is totally cheating.
         // send(clientSocket, msg.c_str(), msg.length() - 1, 0);
     }
-    // This is slightly fragile, since it's relying on the order
-    // of evaluation of the if statement.
     else
     {
-        std::string not_implemented_msg = "Command not recognized\n";
-        if(send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0){
+        printf("Inside the else for command not recognized.\n");
+        std::string not_implemented_msg = "SERVER: Command not recognized\n";
+        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        {
             perror("Failed to send message to client");
         }
         std::cout << "Unknown command from client:" << buffer << std::endl;
     }
+
+    printf("End of the clientCommand\n");
 }
 
 int main(int argc, char *argv[])
@@ -220,7 +261,7 @@ int main(int argc, char *argv[])
     int maxfds;           // Passed to select() as max fd in set
     struct sockaddr_in client;
     socklen_t clientLen;
-    char buffer[1025]; // buffer for reading from clients
+    char buffer[5000]; // buffer for reading from clients
 
     if (argc != 2)
     {

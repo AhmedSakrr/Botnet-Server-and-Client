@@ -34,7 +34,7 @@
 void listenServer(int serverSocket)
 {
     int nread;         // Bytes read from socket
-    char buffer[1025]; // Buffer for reading input
+    char buffer[5000]; // Buffer for reading input
 
     while (true)
     {
@@ -54,7 +54,7 @@ void listenServer(int serverSocket)
     }
 }
 
-bool sendClientCommand(int serverSocket, char *buffer)
+bool sendClientCommand(int serverSocket, char buffer[])
 {
     bool command_is_correct = false;
     std::vector<std::string> tokens;
@@ -62,37 +62,41 @@ bool sendClientCommand(int serverSocket, char *buffer)
     // Returns a pointer to the first token in the string
     char *token = strtok(buffer, ",");
 
-    while(token != NULL){
-        printf("%s\n", token);
+    // Cycle through the tokens, dividing them based on the "," and adding them to the tokens vector
+        while(token != NULL){
+        // printf("%s\n", token);
         tokens.push_back(token);
 
         token = strtok(NULL, ",");
     }
     
-    if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2)) // syntax: FETCH GROUPID
+    // Groups should use the syntax P3_GROUP_n where "n" is your group number
+    std::string group_prefix = "P3_GROUP_";
+    
+    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
-        printf("Command FETCH recognized\n");
+        printf("CLIENT: Command FETCH recognized\n");
         command_is_correct = true;
     }
-    else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
+    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
     {
-        printf("Command SEND recognized\n");
+        printf("CLIENT: Command SEND recognized\n");
         command_is_correct = true;
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0) // syntax QUERYSERVERS
     {
-        //TODO: this dummy requires a , at the end, fix it pls
-        printf("Command QUERYSERVERS recognized\n");
+        //TODO: For now, it only works if you write "QUERYSERVERS,"
+        printf("CLIENT: Command QUERYSERVERS recognized\n");
         command_is_correct = true;
     }
     else{
-        printf("Unknown command\n");
+        printf("CLIENT: Unknown command. Will not be send to the Server\n");
     }
 
     if(command_is_correct){
         if (send(serverSocket, buffer, strlen(buffer), 0) == -1)
         {
-            perror("send() to server failed: ");
+            perror("CLIENT: send() to server failed: ");
             return true;
         }
         return false;
@@ -107,7 +111,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv_addr; // Socket address for server
     int serverSocket;             // Socket used for server
     int nwrite;                   // No. bytes written to server
-    char buffer[1025];            // buffer for writing to server
+    char buffer[5000];            // buffer for writing to server
     bool finished;
     int set = 1; // Toggle for setsockopt
 
