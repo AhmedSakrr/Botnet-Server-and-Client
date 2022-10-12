@@ -56,21 +56,29 @@ void listenServer(int serverSocket)
 }
 
 bool sendClientCommand(int serverSocket, char *buffer)
-{
+{ 
+    buffer[strlen(buffer)-1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
+                                    // that there is always a comma in the buffer. This is needed for the correct
+                                    // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                    // commands, like QUERYSERVERS
+
     bool command_is_correct = false;
     vector<string> tokens;
     string token;
-
-    if (buffer.find(",") != std::string::npos) {
-    std::cout << "found!" << '\n';
-}
 
     // Split command from client into tokens for parsing
     boost::split(tokens, buffer, boost::is_any_of(","));
 
     for (int i = 0; i < tokens.size(); i++)
     {
-        cout << tokens[i] << endl;
+        if(tokens[i].size() != 0){
+            cout << tokens[i] << endl;
+        }
+    }
+
+    // Checks if the last token is empty, removes it if true
+    if(tokens.back().size() == 0){
+        tokens.pop_back();
     }
 
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
@@ -88,7 +96,6 @@ bool sendClientCommand(int serverSocket, char *buffer)
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        // TODO: For now, it only works if you write "QUERYSERVERS,"
         printf("CLIENT: Command QUERYSERVERS recognized\n");
         command_is_correct = true;
     }

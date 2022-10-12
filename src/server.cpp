@@ -179,8 +179,6 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     vector<string> tokens;
     char *token = strtok(buffer, ",");
 
-    string a(buffer);
-
     while (token != NULL)
     {
         tokens.push_back(token);
