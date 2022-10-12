@@ -52,8 +52,6 @@
 #include <thread>
 #include <map>
 
-#include <bits/stdc++.h>
-
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
@@ -175,19 +173,12 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
 void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
-    printf("Buffer contains %s\n", buffer);
-
-    printf("Inside clientCommand\n");
 
     std::vector<std::string> tokens;
     char *token = strtok(buffer, ",");
 
-    std::cout << "The buffer contains: " << buffer << std::endl;
-
-    printf("Before while tokenizer\n");
     while (token != NULL)
     {
-        printf("Insie the while: %s\n", token);
         tokens.push_back(token);
 
         token = strtok(NULL, ",");
@@ -195,10 +186,8 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
 
     std::string group_prefix = "P3_GROUP_";
 
-    printf("Before the first if\n");
     if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
-        printf("Inside the FETCH if\n");
         std::string group = tokens[1];
         std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
@@ -225,29 +214,15 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
         {
             perror("Failed to send message to client");
         }
-        // std::cout << "Who is logged on" << std::endl;
-        // std::string msg;
-
-        // for (auto const &names : clients)
-        // {
-        //     msg += names.second->name + ",";
-        // }
-        // // Reducing the msg length by 1 loses the excess "," - which
-        // // granted is totally cheating.
-        // send(clientSocket, msg.c_str(), msg.length() - 1, 0);
     }
     else
     {
-        printf("Inside the else for command not recognized.\n");
         std::string not_implemented_msg = "SERVER: Command not recognized\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
         }
-        std::cout << "Unknown command from client:" << buffer << std::endl;
     }
-
-    printf("End of the clientCommand\n");
 }
 
 int main(int argc, char *argv[])

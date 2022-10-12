@@ -26,8 +26,8 @@
 #include <sstream>
 #include <thread>
 #include <map>
+#include <boost/algorithm/string.hpp>
 
-#include <bits/stdc++.h>
 
 // Threaded function for handling responses from server
 
@@ -50,25 +50,20 @@ void listenServer(int serverSocket)
         {
             printf("%s\n", buffer);
         }
-        printf("here\n");
     }
 }
 
-bool sendClientCommand(int serverSocket, char buffer[])
+bool sendClientCommand(int serverSocket, char *buffer)
 {
     bool command_is_correct = false;
     std::vector<std::string> tokens;
+    std::string token;
 
-    // Returns a pointer to the first token in the string
-    char *token = strtok(buffer, ",");
+    // Split command from client into tokens for parsing
+    boost::split(tokens,buffer,boost::is_any_of(","));
 
-    // Cycle through the tokens, dividing them based on the "," and adding them to the tokens vector
-    while (token != NULL)
-    {
-        // printf("%s\n", token);
-        tokens.push_back(token);
-
-        token = strtok(NULL, ",");
+    for (int i=0; i<tokens.size(); i++) {
+        std::cout << tokens[i] << std::endl;
     }
 
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
@@ -92,7 +87,7 @@ bool sendClientCommand(int serverSocket, char buffer[])
     }
     else
     {
-        printf("CLIENT: Unknown command. Will not be send to the Server\n");
+        printf("CLIENT: Unknown command.\n");
     }
 
     if (command_is_correct)
@@ -179,9 +174,7 @@ int main(int argc, char *argv[])
     {
         bzero(buffer, sizeof(buffer));
 
-        printf("Enter a command (or press ctrl+C to exit): ");
         fgets(buffer, sizeof(buffer), stdin);
-        printf("\n");
 
         finished = sendClientCommand(serverSocket, buffer);
     }

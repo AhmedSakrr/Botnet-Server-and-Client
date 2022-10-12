@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=--std=c++11
+CFLAGS=--std=c++11 -I /opt/homebrew/Cellar/boost/1.80.0
 SOURCE_DIR=./src
 BIN_DIR=./bin
 
