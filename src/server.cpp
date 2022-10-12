@@ -175,7 +175,6 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
 void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
-
     vector<string> tokens;
     char *token = strtok(buffer, ",");
 
@@ -188,7 +187,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
 
     string group_prefix = "P3_GROUP_";
 
-    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
+    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2))
     {
         string group = tokens[1];
         string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
@@ -198,7 +197,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
         }
         // TODO: Implement FETCH command
     }
-    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) // syntax SEND GROUPID msg
+    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3))
     {
         string group = tokens[1];
         string message = tokens[2];

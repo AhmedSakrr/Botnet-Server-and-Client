@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
     int nwrite;                   // No. bytes written to server
     char buffer[5000];            // buffer for writing to server
     bool finished;
-    int set = 1; // Toggle for setsockopt
+    int set = 1;                  // Toggle for setsockopt
 
     if (argc != 3)
     {
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    hints.ai_family = AF_INET; // IPv4 only addresses
+    hints.ai_family = AF_INET;    // IPv4 only addresses
     hints.ai_socktype = SOCK_STREAM;
 
     memset(&hints, 0, sizeof(hints));
