@@ -63,16 +63,17 @@ bool sendClientCommand(int serverSocket, char buffer[])
     char *token = strtok(buffer, ",");
 
     // Cycle through the tokens, dividing them based on the "," and adding them to the tokens vector
-        while(token != NULL){
+    while (token != NULL)
+    {
         // printf("%s\n", token);
         tokens.push_back(token);
 
         token = strtok(NULL, ",");
     }
-    
+
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
     std::string group_prefix = "P3_GROUP_";
-    
+
     if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
         printf("CLIENT: Command FETCH recognized\n");
@@ -85,15 +86,17 @@ bool sendClientCommand(int serverSocket, char buffer[])
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0) // syntax QUERYSERVERS
     {
-        //TODO: For now, it only works if you write "QUERYSERVERS,"
+        // TODO: For now, it only works if you write "QUERYSERVERS,"
         printf("CLIENT: Command QUERYSERVERS recognized\n");
         command_is_correct = true;
     }
-    else{
+    else
+    {
         printf("CLIENT: Unknown command. Will not be send to the Server\n");
     }
 
-    if(command_is_correct){
+    if (command_is_correct)
+    {
         if (send(serverSocket, buffer, strlen(buffer), 0) == -1)
         {
             perror("CLIENT: send() to server failed: ");
@@ -102,7 +105,7 @@ bool sendClientCommand(int serverSocket, char buffer[])
         return false;
     }
 
-    return false;    
+    return false;
 }
 
 int main(int argc, char *argv[])
