@@ -26,8 +26,10 @@
 #include <sstream>
 #include <thread>
 #include <map>
+
 #include <boost/algorithm/string.hpp>
 
+using namespace std;
 
 // Threaded function for handling responses from server
 
@@ -56,18 +58,19 @@ void listenServer(int serverSocket)
 bool sendClientCommand(int serverSocket, char *buffer)
 {
     bool command_is_correct = false;
-    std::vector<std::string> tokens;
-    std::string token;
+    vector<string> tokens;
+    string token;
 
     // Split command from client into tokens for parsing
-    boost::split(tokens,buffer,boost::is_any_of(","));
+    boost::split(tokens, buffer, boost::is_any_of(","));
 
-    for (int i=0; i<tokens.size(); i++) {
-        std::cout << tokens[i] << std::endl;
+    for (int i = 0; i < tokens.size(); i++)
+    {
+        cout << tokens[i] << endl;
     }
 
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
-    std::string group_prefix = "P3_GROUP_";
+    string group_prefix = "P3_GROUP_";
 
     if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) // syntax: FETCH GROUPID
     {
@@ -167,7 +170,7 @@ int main(int argc, char *argv[])
     }
 
     // Listen and print replies from server
-    std::thread serverThread(listenServer, serverSocket);
+    thread serverThread(listenServer, serverSocket);
 
     finished = false;
     while (!finished)
