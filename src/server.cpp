@@ -52,6 +52,8 @@
 #include <thread>
 #include <map>
 
+#include <boost/algorithm/string.hpp>
+
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
@@ -60,8 +62,6 @@
 
 #define BACKLOG 5 // Allowed length of queue of waiting connections
 
-using namespace std;
-
 // Simple class for handling connections from clients.
 //
 // Client(int socket) - socket to send/receive traffic from client.
@@ -69,7 +69,7 @@ class Client
 {
 public:
     int sock;         // socket of client connection
-    string name; // Limit length of name of client's user
+    std::string name; // Limit length of name of client's user
 
     Client(int socket) : sock(socket) {}
 
@@ -83,7 +83,7 @@ public:
 // Quite often a simple array can be used as a lookup table,
 // (indexed on socket no.) sacrificing memory for speed.
 
-map<int, Client *> clients; // Lookup table for per Client information
+std::map<int, Client *> clients; // Lookup table for per Client information
 
 // Open socket for specified port.
 //
@@ -162,7 +162,7 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
     {
         for (auto const &p : clients)
         {
-            *maxfds = max(*maxfds, p.second->sock);
+            *maxfds = std::max(*maxfds, p.second->sock);
         }
     }
 
@@ -175,22 +175,37 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
 void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
-    vector<string> tokens;
-    char *token = strtok(buffer, ",");
+    buffer[strlen(buffer)-1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
+                                    // that there is always a comma in the buffer. This is needed for the correct
+                                    // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                    // commands, like QUERYSERVERS
 
-    while (token != NULL)
+    bool command_is_correct = false;
+    std::vector<std::string> tokens;
+    std::string token;
+
+    // Split command from client into tokens for parsing
+    boost::split(tokens, buffer, boost::is_any_of(","));
+
+    printf("Received command: ");
+    for (int i = 0; i < tokens.size(); i++)
     {
-        tokens.push_back(token);
-
-        token = strtok(NULL, ",");
+        if(tokens[i].size() != 0){
+            std::cout << tokens[i] << std::endl;
+        }
     }
 
-    string group_prefix = "P3_GROUP_";
+    // Checks if the last token is empty, removes it if true
+    if(tokens.back().size() == 0){
+        tokens.pop_back();
+    }
+
+    std::string group_prefix = "P3_GROUP_";
 
     if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2))
     {
-        string group = tokens[1];
-        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        std::string group = tokens[1];
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -199,9 +214,9 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3))
     {
-        string group = tokens[1];
-        string message = tokens[2];
-        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        std::string group = tokens[1];
+        std::string message = tokens[2];
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -210,7 +225,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -218,7 +233,7 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     }
     else
     {
-        string not_implemented_msg = "SERVER: Command not recognized\n";
+        std::string not_implemented_msg = "SERVER: Command not recognized\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -241,7 +256,7 @@ int main(int argc, char *argv[])
 
     if (argc != 2)
     {
-        printf("Usage: chat_server <ip port>\n");
+        printf("Usage: server <ip port>\n");
         exit(0);
     }
 
@@ -291,7 +306,7 @@ int main(int argc, char *argv[])
                 FD_SET(clientSock, &openSockets);
 
                 // And update the maximum file descriptor
-                maxfds = max(maxfds, clientSock);
+                maxfds = std::max(maxfds, clientSock);
 
                 // create a new client to store information.
                 clients[clientSock] = new Client(clientSock);
@@ -302,7 +317,7 @@ int main(int argc, char *argv[])
                 printf("Client connected on server: %d\n", clientSock);
             }
             // Now check for commands from clients
-            list<Client *> disconnectedClients;
+            std::list<Client *> disconnectedClients;
             while (n-- > 0)
             {
                 for (auto const &pair : clients)
@@ -321,7 +336,6 @@ int main(int argc, char *argv[])
                         // only triggers if there is something on the socket for us.
                         else
                         {
-                            cout << buffer << endl;
                             clientCommand(client->sock, &openSockets, &maxfds, buffer);
                         }
                     }

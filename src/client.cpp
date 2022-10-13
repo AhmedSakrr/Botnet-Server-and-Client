@@ -69,13 +69,6 @@ bool sendClientCommand(int serverSocket, char *buffer)
     // Split command from client into tokens for parsing
     boost::split(tokens, buffer, boost::is_any_of(","));
 
-    for (int i = 0; i < tokens.size(); i++)
-    {
-        if(tokens[i].size() != 0){
-            cout << tokens[i] << endl;
-        }
-    }
-
     // Checks if the last token is empty, removes it if true
     if(tokens.back().size() == 0){
         tokens.pop_back();
