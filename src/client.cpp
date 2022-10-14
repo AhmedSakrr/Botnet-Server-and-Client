@@ -92,6 +92,11 @@ bool sendClientCommand(int serverSocket, char *buffer)
         printf("CLIENT: Command QUERYSERVERS recognized\n");
         command_is_correct = true;
     }
+    else if (tokens[0].compare("CONNECT") == 0 && (tokens.size() == 3)) 
+    {
+        printf("CLIENT: Command CONNECT recognized\n");
+        command_is_correct = true;
+    }
     else
     {
         printf("CLIENT: Unknown command.\n");

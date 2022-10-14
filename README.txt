@@ -26,3 +26,6 @@ To compile and execute the server on Skel:
 g++ --std=c++11 server.cpp -o server
 
 ---------------------------------------------------------------------------------------------------
+Command to find teacher's servers
+
+s aux|grep i_server

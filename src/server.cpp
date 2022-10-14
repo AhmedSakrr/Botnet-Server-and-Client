@@ -46,13 +46,12 @@
 #include <map>
 #include <vector>
 #include <thread>
-
+#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <map>
 
-#include <boost/algorithm/string.hpp>
 
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
@@ -84,6 +83,18 @@ public:
 // (indexed on socket no.) sacrificing memory for speed.
 
 std::map<int, Client *> clients; // Lookup table for per Client information
+
+int listenSock;       // Socket for connections to server
+int clientSock;       // Socket of connecting client
+fd_set openSockets;   // Current open sockets
+fd_set readSockets;   // Socket list for select()
+fd_set exceptSockets; // Exception socket list
+int maxfds;           // Passed to select() as max fd in set
+
+char buffer[5000]; // buffer for reading from clients
+
+char SOH = 0x01;
+char EOT = 0x04;
 
 // Open socket for specified port.
 //
@@ -173,12 +184,92 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
 // Process command from client on the server
 
+void connectToServer(std::string ip_addr, std::string port, std::string group_id)
+{
+    struct sockaddr_in serv_addr; // Socket address for server
+    int connectSock;
+    int set = 1;
+
+    struct hostent *server;
+    server = gethostbyname(ip_addr.c_str());
+
+    bzero((char *)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr,
+          (char *)&serv_addr.sin_addr.s_addr,
+          server->h_length);
+    serv_addr.sin_port = htons(atoi(port.c_str()));
+
+    connectSock = socket(AF_INET, SOCK_STREAM, 0);
+
+    // Turn on SO_REUSEADDR to allow socket to be quickly reused after
+    // program exit.
+
+    if (setsockopt(connectSock, SOL_SOCKET, SO_REUSEADDR, &set, sizeof(set)) < 0)
+    {
+        printf("Failed to set SO_REUSEADDR for port %s\n", port.c_str());
+        perror("setsockopt failed: ");
+    }
+
+    if (connect(connectSock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        // EINPROGRESS means that the connection is still being setup. Typically this
+        // only occurs with non-blocking sockets. (The serverSocket above is explicitly
+        // not in non-blocking mode, so this check here is just an example of how to
+        // handle this properly.)
+        if (errno != EINPROGRESS)
+        {
+            printf("Failed to open socket to server: %s\n", ip_addr.c_str());
+            perror("Connect failed: ");
+            exit(0);
+        }
+    }
+
+    char *group = "JOIN,P3_GROUP_79";
+    char *group2 = strcat((char *) SOH, group);
+    char *group3 = strcat(group2, (char *) EOT);
+    
+    if (send(connectSock, group3, strlen(group3), 0) < 0)
+    {
+        perror("Failed to send message to client");
+    }
+    else
+    {
+        printf("Looks like we sent the message ehe\n");
+    }
+
+    bzero(buffer, sizeof(buffer));
+    memset(&buffer, 0, sizeof(buffer));
+
+    printf("After send\n");
+    // if (recv(connectSock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
+    // {
+    //     printf("nothing received :(\n");
+    // }
+    // printf("After receive\n");
+
+    // std::cout << "The buffer contains: " << buffer << std::endl;
+    printf("Before read: %s\n", buffer);
+
+    int nread = read(connectSock, buffer, sizeof(buffer));
+
+    if (nread == 0) // Server has dropped us
+    {
+        printf("Over and Out\n");
+        exit(0);
+    }
+    else if (nread > 0)
+    {
+        printf("After: %s\n", buffer);
+    }
+}
+
 void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
 {
-    buffer[strlen(buffer)-1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
-                                    // that there is always a comma in the buffer. This is needed for the correct
-                                    // use of boost::is_any_of() Without the comma it doesn't work on single words
-                                    // commands, like QUERYSERVERS
+    buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
+                                      // that there is always a comma in the buffer. This is needed for the correct
+                                      // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                      // commands, like QUERYSERVERS
 
     bool command_is_correct = false;
     std::vector<std::string> tokens;
@@ -187,16 +278,9 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
     // Split command from client into tokens for parsing
     boost::split(tokens, buffer, boost::is_any_of(","));
 
-    printf("Received command: ");
-    for (int i = 0; i < tokens.size(); i++)
-    {
-        if(tokens[i].size() != 0){
-            std::cout << tokens[i] << std::endl;
-        }
-    }
-
     // Checks if the last token is empty, removes it if true
-    if(tokens.back().size() == 0){
+    if (tokens.back().size() == 0)
+    {
         tokens.pop_back();
     }
 
@@ -231,6 +315,19 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
             perror("Failed to send message to client");
         }
     }
+    else if (tokens[0].compare("CONNECT") == 0 && (tokens.size() == 3))
+    {
+        std::string ip = tokens[1];
+        std::string port = tokens[2];
+
+        connectToServer(ip, port, "P3_GROUP_79");
+
+        std::string not_implemented_msg = "SERVER: Command recognized by server";
+        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        {
+            perror("Failed to send message to client");
+        }
+    }
     else
     {
         std::string not_implemented_msg = "SERVER: Command not recognized\n";
@@ -244,15 +341,8 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
 int main(int argc, char *argv[])
 {
     bool finished;
-    int listenSock;       // Socket for connections to server
-    int clientSock;       // Socket of connecting client
-    fd_set openSockets;   // Current open sockets
-    fd_set readSockets;   // Socket list for select()
-    fd_set exceptSockets; // Exception socket list
-    int maxfds;           // Passed to select() as max fd in set
     struct sockaddr_in client;
     socklen_t clientLen;
-    char buffer[5000]; // buffer for reading from clients
 
     if (argc != 2)
     {
