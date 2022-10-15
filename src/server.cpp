@@ -61,18 +61,20 @@
 
 #define BACKLOG 5 // Allowed length of queue of waiting connections
 
+std::string MY_GROUP = "P3_GROUP_79";
+
 // Simple class for handling connections from clients.
 //
 // Client(int socket) - socket to send/receive traffic from client.
-class Client
+class Server
 {
 public:
     int sock;         // socket of client connection
     std::string name; // Limit length of name of client's user
 
-    Client(int socket) : sock(socket) {}
+    Server(int socket) : sock(socket) {}
 
-    ~Client() {} // Virtual destructor defined for base class
+    ~Server() {} // Virtual destructor defined for base class
 };
 
 // Note: map is not necessarily the most efficient method to use here,
@@ -82,19 +84,20 @@ public:
 // Quite often a simple array can be used as a lookup table,
 // (indexed on socket no.) sacrificing memory for speed.
 
-std::map<int, Client *> clients; // Lookup table for per Client information
-
-int listenSock;       // Socket for connections to server
-int clientSock;       // Socket of connecting client
-fd_set openSockets;   // Current open sockets
-fd_set readSockets;   // Socket list for select()
-fd_set exceptSockets; // Exception socket list
-int maxfds;           // Passed to select() as max fd in set
+std::map<int, Server *> servers; // Lookup table for per Client information
 
 char buffer[5000]; // buffer for reading from clients
 
 char SOH = 0x01;
 char EOT = 0x04;
+
+
+int listenSock;       // Socket for connections to server
+int serverSock;       // Socket of connecting client
+fd_set openSockets;   // Current open sockets
+fd_set readSockets;   // Socket list for select()
+fd_set exceptSockets; // Exception socket list
+int maxfds;           // Passed to select() as max fd in set
 
 // Open socket for specified port.
 //
@@ -155,9 +158,9 @@ int open_socket(int portno)
     }
 }
 
+
 // Close a client's connection, remove it from the client list, and
 // tidy up select sockets afterwards.
-
 void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 {
 
@@ -171,7 +174,7 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 
     if (*maxfds == clientSocket)
     {
-        for (auto const &p : clients)
+        for (auto const &p : servers)
         {
             *maxfds = std::max(*maxfds, p.second->sock);
         }
@@ -182,8 +185,44 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
     FD_CLR(clientSocket, openSockets);
 }
 
-// Process command from client on the server
 
+void serverCommand(int serverSocket, char *buffer)
+{
+    buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
+                                    // that there is always a comma in the buffer. This is needed for the correct
+                                    // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                    // commands, like QUERYSERVERS
+
+    bool command_is_correct = false;
+    std::vector<std::string> tokens;
+    std::string token;
+
+    // Split command from client into tokens for parsing
+    boost::split(tokens, buffer, boost::is_any_of(","));
+
+    // Checks if the last token is empty, removes it if true
+    if (tokens.back().size() == 0)
+    {
+        tokens.pop_back();
+    }
+
+    // Incorrect message
+    if (tokens[0][0] != SOH) {    
+        if (send(serverSocket, "Incorrect Message", strlen("Incorrect Message")-1, 0) < 0)
+        {
+            perror("Failed to send message to server");
+        }
+    }
+    else {
+        for (int i=0; i<tokens.size(); i++) {
+            std::cout << tokens[i] << std::endl;
+        }
+    }
+
+}
+
+
+// Process command from client on the server
 void connectToServer(std::string ip_addr, std::string port, std::string group_id)
 {
     struct sockaddr_in serv_addr; // Socket address for server
@@ -225,28 +264,26 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
         }
     }
 
-    std::string group = "\x01JOIN,P3_GROUP_79\x04";
+    // Add new server to the list of open sockets
+    FD_SET(connectSock, &openSockets);
+
+    // And update the maximum file descriptor
+    maxfds = std::max(maxfds, connectSock);
+
+    // create a new Server to store information.
+    servers[connectSock] = new Server(serverSock);
+
+    // Send the JOIN message to the new server
+    std::string group = "\x01JOIN," + MY_GROUP + "\x04";
     
     if (send(connectSock, group.c_str(), strlen(group.c_str()), 0) < 0)
     {
         perror("Failed to send message to client");
     }
-    else
-    {
-        printf("Looks like we sent the message ehe\n");
-    }
 
-    bzero(buffer, sizeof(buffer));
     memset(&buffer, 0, sizeof(buffer));
 
-    // if (recv(connectSock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
-    // {
-    //     printf("nothing received :(\n");
-    // }
-    // printf("After receive\n");
-
-    // std::cout << "The buffer contains: " << buffer << std::endl;
-
+    // Receive the JOIN message from the server
     int nread = read(connectSock, buffer, sizeof(buffer));
 
     if (nread == 0) // Server has dropped us
@@ -256,10 +293,12 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     }
     else if (nread > 0)
     {
-        printf("After: %s\n", buffer);
+        printf("Server Response: %s\n", buffer);
+        // process the JOIN command and return SERVERS
+        serverCommand(connectSock, buffer);
     }
 
-    bzero(buffer, sizeof(buffer));
+    // Receive the SERVERS command
     memset(&buffer, 0, sizeof(buffer));
     nread = read(connectSock, buffer, sizeof(buffer));
 
@@ -270,11 +309,12 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     }
     else if (nread > 0)
     {
-        printf("After: %s\n", buffer);
+        printf("Server Response: %s\n", buffer);
     }
 }
 
-void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buffer)
+
+void clientCommand(int clientSocket, char *buffer)
 {
     buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
                                       // that there is always a comma in the buffer. This is needed for the correct
@@ -330,10 +370,10 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
         std::string ip = tokens[1];
         std::string port = tokens[2];
 
-        connectToServer(ip, port, "P3_GROUP_79");
+        connectToServer(ip, port, MY_GROUP);
 
-        std::string not_implemented_msg = "SERVER: Command recognized by server";
-        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        std::string reply_msg = "SERVER: Command executed by server";
+        if (send(clientSocket, reply_msg.c_str(), strlen(reply_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
         }
@@ -345,6 +385,20 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, char *buf
         {
             perror("Failed to send message to client");
         }
+    }
+}
+
+
+void processMessage(int sock, char *buffer) {
+    // server command
+    if (buffer[0] == SOH) {
+        std::cout << "server command" << std::endl;
+        serverCommand(sock, buffer);
+    }
+    // client command
+    else {
+        std::cout << "client command: " << buffer << std::endl;
+        clientCommand(sock, buffer);
     }
 }
 
@@ -396,53 +450,53 @@ int main(int argc, char *argv[])
         }
         else
         {
-            // First, accept  any new connections to the server on the listening socket
+            // First, accept any new connections to the server on the listening socket
             if (FD_ISSET(listenSock, &readSockets))
             {
-                clientSock = accept(listenSock, (struct sockaddr *)&client,
+                serverSock = accept(listenSock, (struct sockaddr *)&client,
                                     &clientLen);
                 printf("accept***\n");
                 // Add new client to the list of open sockets
-                FD_SET(clientSock, &openSockets);
+                FD_SET(serverSock, &openSockets);
 
                 // And update the maximum file descriptor
-                maxfds = std::max(maxfds, clientSock);
+                maxfds = std::max(maxfds, serverSock);
 
                 // create a new client to store information.
-                clients[clientSock] = new Client(clientSock);
+                servers[serverSock] = new Server(serverSock);
 
                 // Decrement the number of sockets waiting to be dealt with
                 n--;
 
-                printf("Client connected on server: %d\n", clientSock);
+                printf("Client connected on server: %d\n", serverSock);
             }
             // Now check for commands from clients
-            std::list<Client *> disconnectedClients;
+            std::list<Server *> disconnectedServers;
             while (n-- > 0)
             {
-                for (auto const &pair : clients)
+                for (auto const &pair : servers)
                 {
-                    Client *client = pair.second;
+                    Server *server = pair.second;
 
-                    if (FD_ISSET(client->sock, &readSockets))
+                    if (FD_ISSET(server->sock, &readSockets))
                     {
                         // recv() == 0 means client has closed connection
-                        if (recv(client->sock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
+                        if (recv(server->sock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
                         {
-                            disconnectedClients.push_back(client);
-                            closeClient(client->sock, &openSockets, &maxfds);
+                            disconnectedServers.push_back(server);
+                            closeClient(server->sock, &openSockets, &maxfds);
                         }
                         // We don't check for -1 (nothing received) because select()
                         // only triggers if there is something on the socket for us.
                         else
                         {
-                            clientCommand(client->sock, &openSockets, &maxfds, buffer);
+                            processMessage(server->sock, buffer);
                         }
                     }
                 }
                 // Remove client from the clients list
-                for (auto const &c : disconnectedClients)
-                    clients.erase(c->sock);
+                for (auto const &c : disconnectedServers)
+                    servers.erase(c->sock);
             }
         }
     }
