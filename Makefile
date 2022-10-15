@@ -13,4 +13,4 @@ client_mac: $(SOURCE_DIR)/client.cpp
 	$(CC) $(CFLAGS) -I /opt/homebrew/Cellar/boost/1.80.0/include $(SOURCE_DIR)/client.cpp -o $(BIN_DIR)/client 
 
 server_mac: $(SOURCE_DIR)/server.cpp
-	$(CC) $(CFLAGS) -I /opt/homebrew/Cellar/boost/1.80.0/include $(SOURCE_DIR)/server.cpp -o $(BIN_DIR)/tsamgroup79
+	$(CC) $(CFLAGS) -I /opt/homebrew/Cellar/boost/1.80.0/include $(SOURCE_DIR)/server.cpp -o $(BIN_DIR)/server

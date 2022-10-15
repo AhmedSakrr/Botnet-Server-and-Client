@@ -28,4 +28,6 @@ g++ --std=c++11 server.cpp -o server
 ---------------------------------------------------------------------------------------------------
 Command to find teacher's servers
 
-s aux|grep i_server
+ps aux|grep i_server
+
+IP: 130.208.243.61

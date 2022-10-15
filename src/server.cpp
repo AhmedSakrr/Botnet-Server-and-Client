@@ -225,11 +225,9 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
         }
     }
 
-    char *group = "JOIN,P3_GROUP_79";
-    char *group2 = strcat((char *) SOH, group);
-    char *group3 = strcat(group2, (char *) EOT);
+    std::string group = "\x01JOIN,P3_GROUP_79\x04";
     
-    if (send(connectSock, group3, strlen(group3), 0) < 0)
+    if (send(connectSock, group.c_str(), strlen(group.c_str()), 0) < 0)
     {
         perror("Failed to send message to client");
     }
@@ -241,7 +239,6 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     bzero(buffer, sizeof(buffer));
     memset(&buffer, 0, sizeof(buffer));
 
-    printf("After send\n");
     // if (recv(connectSock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
     // {
     //     printf("nothing received :(\n");
@@ -249,9 +246,22 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     // printf("After receive\n");
 
     // std::cout << "The buffer contains: " << buffer << std::endl;
-    printf("Before read: %s\n", buffer);
 
     int nread = read(connectSock, buffer, sizeof(buffer));
+
+    if (nread == 0) // Server has dropped us
+    {
+        printf("Over and Out\n");
+        exit(0);
+    }
+    else if (nread > 0)
+    {
+        printf("After: %s\n", buffer);
+    }
+
+    bzero(buffer, sizeof(buffer));
+    memset(&buffer, 0, sizeof(buffer));
+    nread = read(connectSock, buffer, sizeof(buffer));
 
     if (nread == 0) // Server has dropped us
     {
