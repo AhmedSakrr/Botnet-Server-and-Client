@@ -71,6 +71,8 @@ class Server
 public:
     int sock;         // socket of client connection
     std::string name; // Limit length of name of client's user
+    std::string ip_addr;
+    std::string portno;
 
     Server(int socket) : sock(socket) {}
 
@@ -91,6 +93,9 @@ char buffer[5000]; // buffer for reading from clients
 char SOH = 0x01;
 char EOT = 0x04;
 
+struct sockaddr_in own_addr;
+std::string own_ip;
+std::string own_port;
 
 int listenSock;       // Socket for connections to server
 int serverSock;       // Socket of connecting client
@@ -98,6 +103,16 @@ fd_set openSockets;   // Current open sockets
 fd_set readSockets;   // Socket list for select()
 fd_set exceptSockets; // Exception socket list
 int maxfds;           // Passed to select() as max fd in set
+
+std::string toString(char* a, int size)
+{
+    int i;
+    std::string s = "";
+    for (i = 0; i < size; i++) {
+        s = s + a[i];
+    }
+    return s;
+}
 
 // Open socket for specified port.
 //
@@ -185,7 +200,6 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
     FD_CLR(clientSocket, openSockets);
 }
 
-
 void serverCommand(int serverSocket, char *buffer)
 {
     buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
@@ -193,12 +207,15 @@ void serverCommand(int serverSocket, char *buffer)
                                     // use of boost::is_any_of() Without the comma it doesn't work on single words
                                     // commands, like QUERYSERVERS
 
+    std::cout << "in fnc" << serverSock << std::endl;
+
     bool command_is_correct = false;
     std::vector<std::string> tokens;
     std::string token;
 
     // Split command from client into tokens for parsing
     boost::split(tokens, buffer, boost::is_any_of(","));
+
 
     // Checks if the last token is empty, removes it if true
     if (tokens.back().size() == 0)
@@ -213,12 +230,31 @@ void serverCommand(int serverSocket, char *buffer)
             perror("Failed to send message to server");
         }
     }
-    else {
-        for (int i=0; i<tokens.size(); i++) {
-            std::cout << tokens[i] << std::endl;
+
+    else if (tokens[0] == "\x01JOIN" && tokens.size() == 2) {
+        // Here, we have connected to another server, or it has connected to us
+        // We want to send all the servers in our servers dictionary
+        // starting with ourself
+        std::string servers_msg = "\x01SERVERS," + MY_GROUP + "," + own_ip + "," + own_port + ";";
+        for (auto const &pair : servers) {
+            Server *s = pair.second;
+            servers_msg.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
+        }
+        std::cout << servers_msg << std::endl;
+        std::cout << serverSock << std::endl;
+        std::cout << servers[serverSock]->name << std::endl;
+        if (send(serverSock, servers_msg.c_str(), strlen(servers_msg.c_str()), 0) < 0)
+        {
+            perror("Failed to send SERVERS message to server");
         }
     }
 
+    else if (tokens[0] == "\x01SERVERS") {
+        servers[serverSocket]->name = tokens[1];
+        servers[serverSocket]->ip_addr = tokens[2];
+        servers[serverSocket]->portno = tokens[3];
+        
+    }
 }
 
 
@@ -276,6 +312,7 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     // Send the JOIN message to the new server
     std::string group = "\x01JOIN," + MY_GROUP + "\x04";
     
+
     if (send(connectSock, group.c_str(), strlen(group.c_str()), 0) < 0)
     {
         perror("Failed to send message to client");
@@ -295,8 +332,10 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     {
         printf("Server Response: %s\n", buffer);
         // process the JOIN command and return SERVERS
+        std::cout << connectSock << std::endl;
         serverCommand(connectSock, buffer);
     }
+
 
     // Receive the SERVERS command
     memset(&buffer, 0, sizeof(buffer));
@@ -310,6 +349,7 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     else if (nread > 0)
     {
         printf("Server Response: %s\n", buffer);
+        serverCommand(connectSock, buffer);
     }
 }
 
@@ -419,6 +459,9 @@ int main(int argc, char *argv[])
     listenSock = open_socket(atoi(argv[1]));
     printf("Listening on port: %d\n", atoi(argv[1]));
 
+    own_port = toString(argv[1], 4);
+    std::cout << own_port << std::endl;
+
     if (listen(listenSock, BACKLOG) < 0)
     {
         printf("Listen failed on port %s\n", argv[1]);
@@ -431,6 +474,12 @@ int main(int argc, char *argv[])
         FD_SET(listenSock, &openSockets);
         maxfds = listenSock;
     }
+
+    socklen_t own_addr_len = sizeof(own_addr);
+    int fail = getsockname(listenSock, (struct sockaddr*)&own_addr, &own_addr_len);
+    char ip_buf[50];
+    const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
+    own_ip = toString(ip_buf, strlen(ip_buf));
 
     finished = false;
 
@@ -465,6 +514,8 @@ int main(int argc, char *argv[])
                 // create a new client to store information.
                 servers[serverSock] = new Server(serverSock);
 
+                servers[serverSock]->name = "client";
+
                 // Decrement the number of sockets waiting to be dealt with
                 n--;
 
@@ -472,32 +523,34 @@ int main(int argc, char *argv[])
             }
             // Now check for commands from clients
             std::list<Server *> disconnectedServers;
-            while (n-- > 0)
+            for (auto const &pair : servers)
             {
-                for (auto const &pair : servers)
-                {
-                    Server *server = pair.second;
+                Server *server = pair.second;
 
-                    if (FD_ISSET(server->sock, &readSockets))
+                if (FD_ISSET(server->sock, &readSockets))
+                {
+                    // recv() == 0 means client has closed connection
+
+                    memset(buffer, 0, sizeof(buffer));
+                    if (recv(server->sock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
                     {
-                        // recv() == 0 means client has closed connection
-                        if (recv(server->sock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
-                        {
-                            disconnectedServers.push_back(server);
-                            closeClient(server->sock, &openSockets, &maxfds);
-                        }
-                        // We don't check for -1 (nothing received) because select()
-                        // only triggers if there is something on the socket for us.
-                        else
-                        {
+                        disconnectedServers.push_back(server);
+                        closeClient(server->sock, &openSockets, &maxfds);
+                    }
+                    // We don't check for -1 (nothing received) because select()
+                    // only triggers if there is something on the socket for us.
+                    else
+                    {
+                        if (strlen(buffer) != 0) {
                             processMessage(server->sock, buffer);
                         }
+                        memset(buffer, 0, sizeof(buffer));
                     }
                 }
-                // Remove client from the clients list
-                for (auto const &c : disconnectedServers)
-                    servers.erase(c->sock);
             }
+            // Remove client from the clients list
+            for (auto const &c : disconnectedServers)
+                servers.erase(c->sock);
         }
     }
 }

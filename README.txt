@@ -6,9 +6,9 @@ OS: Linux
 
 To compile and run the server and client respectively:
 
-make server && ./bin/server
+make server_linux && ./bin/tsamgroup79 4169
 
-make client && ./bin/client
+make client_linux && ./bin/client 127.0.0.1 4169
 
 ---------------------------------------------------------------------------------------------------
 
@@ -31,3 +31,5 @@ Command to find teacher's servers
 ps aux|grep i_server
 
 IP: 130.208.243.61
+---------------------------------------------------------------------------------------------------
+CONNECT,130.208.243.61,4002
