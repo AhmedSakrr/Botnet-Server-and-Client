@@ -207,8 +207,6 @@ void serverCommand(int serverSocket, char *buffer)
                                     // use of boost::is_any_of() Without the comma it doesn't work on single words
                                     // commands, like QUERYSERVERS
 
-    std::cout << "in fnc" << serverSock << std::endl;
-
     bool command_is_correct = false;
     std::vector<std::string> tokens;
     std::string token;
@@ -235,25 +233,23 @@ void serverCommand(int serverSocket, char *buffer)
         // Here, we have connected to another server, or it has connected to us
         // We want to send all the servers in our servers dictionary
         // starting with ourself
+        servers[serverSocket]->name = tokens[1];
+         
         std::string servers_msg = "\x01SERVERS," + MY_GROUP + "," + own_ip + "," + own_port + ";";
         for (auto const &pair : servers) {
             Server *s = pair.second;
-            servers_msg.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
+            if (s->name != "client")
+                servers_msg.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
         }
         std::cout << servers_msg << std::endl;
-        std::cout << serverSock << std::endl;
-        std::cout << servers[serverSock]->name << std::endl;
-        if (send(serverSock, servers_msg.c_str(), strlen(servers_msg.c_str()), 0) < 0)
+        if (send(serverSocket, servers_msg.c_str(), strlen(servers_msg.c_str()), 0) < 0)
         {
             perror("Failed to send SERVERS message to server");
         }
     }
 
     else if (tokens[0] == "\x01SERVERS") {
-        servers[serverSocket]->name = tokens[1];
-        servers[serverSocket]->ip_addr = tokens[2];
-        servers[serverSocket]->portno = tokens[3];
-        
+
     }
 }
 
@@ -261,6 +257,17 @@ void serverCommand(int serverSocket, char *buffer)
 // Process command from client on the server
 void connectToServer(std::string ip_addr, std::string port, std::string group_id)
 {
+    // // Check if already connected, then return
+    // for (auto const &pair : servers) {
+    //     Server *s = pair.second;
+    //     std::cout << s->ip_addr << std::endl;
+    //     std::cout << s->portno << std::endl;
+    //     if (s->ip_addr.compare(ip_addr) == 0 & s->portno.compare(port) == 0) {
+    //         std::cout << "alrdy" << std::endl;
+    //         return;
+    //     }
+    // }
+
     struct sockaddr_in serv_addr; // Socket address for server
     int connectSock;
     int set = 1;
@@ -308,6 +315,8 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
 
     // create a new Server to store information.
     servers[connectSock] = new Server(serverSock);
+    servers[connectSock]->ip_addr = ip_addr;
+    servers[connectSock]->portno = port;
 
     // Send the JOIN message to the new server
     std::string group = "\x01JOIN," + MY_GROUP + "\x04";
@@ -332,7 +341,6 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     {
         printf("Server Response: %s\n", buffer);
         // process the JOIN command and return SERVERS
-        std::cout << connectSock << std::endl;
         serverCommand(connectSock, buffer);
     }
 
