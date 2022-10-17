@@ -241,7 +241,8 @@ void serverCommand(int serverSocket, char *buffer)
             if (s->name != "client")
                 servers_msg.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
         }
-        std::cout << servers_msg << std::endl;
+        servers_msg.append("\x04");
+
         if (send(serverSocket, servers_msg.c_str(), strlen(servers_msg.c_str()), 0) < 0)
         {
             perror("Failed to send SERVERS message to server");
@@ -384,7 +385,7 @@ void clientCommand(int clientSocket, char *buffer)
 
     std::string group_prefix = "P3_GROUP_";
 
-    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2))
+    if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2))
     {
         std::string group = tokens[1];
         std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
@@ -394,23 +395,54 @@ void clientCommand(int clientSocket, char *buffer)
         }
         // TODO: Implement FETCH command
     }
-    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3))
+    else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3))
     {
-        std::string group = tokens[1];
-        std::string message = tokens[2];
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
-        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
-        {
-            perror("Failed to send message to client");
+        std::string to_group = tokens[1];
+        std::string message_to_send = tokens[2];
+
+        bool matched = false;
+        int matching_socket;
+        for (auto const &pair : servers) {
+            Server *server = pair.second;
+            if (server->name.compare(to_group) == 0) {
+                matched = true;
+                matching_socket = pair.first;
+                break;
+            }
         }
+
+        if (matched) {
+            std::string sent_msg = "SERVER: Message sent to group\n";
+            if (send(matching_socket, message_to_send.c_str(), strlen(message_to_send.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to group");
+            }
+            if (send(clientSocket, sent_msg.c_str(), strlen(sent_msg.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to client");
+            }
+        }
+        else {
+            std::string no_match = "SERVER: Group not found in active connections\n";
+            if (send(clientSocket, no_match.c_str(), strlen(no_match.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to client");
+            }
+        }
+
         // TODO: Implement SEND command
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
-        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        std::string query_message = "SERVERS," + MY_GROUP + "," + own_ip + "," + own_port + ";";
+        for (auto const &pair : servers) {
+            Server *s = pair.second;
+            if (s->name != "client")
+                query_message.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
+        }
+        if (send(clientSocket, query_message.c_str(), strlen(query_message.c_str()), 0) < 0)
         {
-            perror("Failed to send message to client");
+            perror("Failed to send query message to client");
         }
     }
     else if (tokens[0].compare("CONNECT") == 0 && (tokens.size() == 3))

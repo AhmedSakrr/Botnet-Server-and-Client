@@ -18,18 +18,35 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <algorithm>
-#include <map>
 #include <vector>
 #include <thread>
 
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <map>
+#include <chrono>
+#include <ctime>
 
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
+
+
+ofstream logfile;
+std::string logfile_path = "log.txt";
+
+
+std::string toString(char* a, int size)
+{
+    int i;
+    std::string s = "";
+    for (i = 0; i < size; i++) {
+        s = s + a[i];
+    }
+    return s;
+}
 
 // Threaded function for handling responses from server
 
@@ -77,25 +94,45 @@ bool sendClientCommand(int serverSocket, char *buffer)
     // Groups should use the syntax P3_GROUP_n where "n" is your group number
     string group_prefix = "P3_GROUP_";
 
-    if ((tokens[0].compare("FETCH") == 0) && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 2)) 
+    if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2)) 
     {
-        printf("CLIENT: Command FETCH recognized\n");
+        // printf("CLIENT: Command FETCH recognized\n");
         command_is_correct = true;
     }
-    else if (tokens[0].compare("SEND") == 0 && tokens[1].rfind(group_prefix, 0) == 0 && (tokens.size() == 3)) 
+    else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3)) 
     {
-        printf("CLIENT: Command SEND recognized\n");
+        // printf("CLIENT: Command SEND recognized\n");
         command_is_correct = true;
+
+        // log the sent message
+
+        // first, get the time
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+
+        // stream into string
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+        auto time_str = oss.str();
+
+        std::string log_msg = "SENT TO " + tokens[1] + ": " + tokens[2] + "; (" + time_str + ")";
+        std::cout << log_msg << std::endl;
+        logfile << log_msg + "\n";
+
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
-        printf("CLIENT: Command QUERYSERVERS recognized\n");
+        // printf("CLIENT: Command QUERYSERVERS recognized\n");
         command_is_correct = true;
     }
     else if (tokens[0].compare("CONNECT") == 0 && (tokens.size() == 3)) 
     {
-        printf("CLIENT: Command CONNECT recognized\n");
+        // printf("CLIENT: Command CONNECT recognized\n");
         command_is_correct = true;
+    }
+    else if (tokens[0].compare("CLOSE") == 0) {
+        logfile.close();
+        exit(0);
     }
     else
     {
@@ -125,12 +162,17 @@ int main(int argc, char *argv[])
     bool finished;
     int set = 1;                  // Toggle for setsockopt
 
-    if (argc != 3)
+    if (argc != 3 and argc != 4)
     {
         printf("Usage: client <ip  port>\n");
+        printf("Or usage: client <ip port logfile>");
         printf("Ctrl-C to terminate\n");
         exit(0);
     }
+
+    if (argc == 4) 
+        logfile_path = toString(argv[3], strlen(argv[3]));
+
 
     hints.ai_family = AF_INET;    // IPv4 only addresses
     hints.ai_socktype = SOCK_STREAM;
@@ -178,6 +220,9 @@ int main(int argc, char *argv[])
         }
     }
 
+    logfile.open (logfile_path);
+    logfile << "START LOG\n";
+
     // Listen and print replies from server
     thread serverThread(listenServer, serverSocket);
 
@@ -190,4 +235,6 @@ int main(int argc, char *argv[])
 
         finished = sendClientCommand(serverSocket, buffer);
     }
+
+    logfile.close();
 }
