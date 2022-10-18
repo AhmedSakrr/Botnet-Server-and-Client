@@ -511,6 +511,7 @@ void processMessage(int sock, char *buffer) {
     }
 }
 
+
 int main(int argc, char *argv[])
 {
     bool finished;
@@ -592,7 +593,8 @@ int main(int argc, char *argv[])
             {
                 serverSock = accept(listenSock, (struct sockaddr *)&client,
                                     &clientLen);
-                printf("accept***\n");
+                printf("accepting new server\n");
+
                 // Add new client to the list of open sockets
                 FD_SET(serverSock, &openSockets);
 
@@ -606,8 +608,6 @@ int main(int argc, char *argv[])
 
                 // Decrement the number of sockets waiting to be dealt with
                 n--;
-
-                printf("Client connected on server: %d\n", serverSock);
             }
 
             // First, check for command from client
