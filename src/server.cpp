@@ -60,7 +60,7 @@
 
 #define BACKLOG 5 // Allowed length of queue of waiting connections
 
-std::string MY_GROUP = "P3_GROUP_69";
+std::string MY_GROUP = "P3_GROUP_79";
 
 // Simple class for handling connections from clients.
 //
@@ -565,31 +565,6 @@ int main(int argc, char *argv[])
 
     bool found_client = false;
 
-    // while (!found_client) {
-
-    //     // Get modifiable copy of readSockets
-    //     readSockets = exceptSockets = openSockets;
-
-    //     // Look at sockets and see which ones have something to be read()
-    //     int l = select(maxfds + 1, &readSockets, NULL, &exceptSockets, NULL);
-
-    //     if (FD_ISSET(listenSock, &readSockets))
-    //         {
-    //             clientSock = accept(listenSock, (struct sockaddr *)&client,
-    //                                 &clientLen);
-    //             printf("accept***\n");
-    //             // Add new client to the list of open sockets
-    //             FD_SET(clientSock, &openSockets);
-
-    //             // And update the maximum file descriptor
-    //             maxfds = std::max(maxfds, clientSock);
-
-    //             found_client = true;
-
-    //             printf("Client connected on server: %d\n", clientSock);
-    //         }
-    // }
-
     finished = false;
     while (!finished)
     {
@@ -610,10 +585,9 @@ int main(int argc, char *argv[])
             // First, accept any new connections to the server on the listening socket
             if (FD_ISSET(listenSock, &readSockets))
             {
-                std::cout << "someone wants connect" << std::endl;
                 serverSock = accept(listenSock, (struct sockaddr *)&client,
                                     &clientLen);
-                printf("accepting new server\n");
+                printf("accept** %i\n", serverSock);
 
                 // Add new client to the list of open sockets
                 FD_SET(serverSock, &openSockets);
