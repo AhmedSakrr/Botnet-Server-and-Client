@@ -76,17 +76,23 @@ void listenServer(int serverSocket)
 
 bool sendClientCommand(int serverSocket, char *buffer)
 { 
-    buffer[strlen(buffer)-1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
-                                    // that there is always a comma in the buffer. This is needed for the correct
-                                    // use of boost::is_any_of() Without the comma it doesn't work on single words
-                                    // commands, like QUERYSERVERS
+    buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
+                                      // that there is always a comma in the buffer. This is needed for the correct
+                                      // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                      // commands, like QUERYSERVERS
+
+    std::vector<std::string> tokens;
+    std::string s = toString(buffer, strlen(buffer));
+    std::string delimiter = ",";
+    size_t pos = 0;
+    std::string token;
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
 
     bool command_is_correct = false;
-    vector<string> tokens;
-    string token;
-
-    // Split command from client into tokens for parsing
-    boost::split(tokens, buffer, boost::is_any_of(","));
 
     // Checks if the last token is empty, removes it if true
     if(tokens.back().size() == 0){
