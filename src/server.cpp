@@ -46,7 +46,6 @@
 #include <map>
 #include <vector>
 #include <thread>
-#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <sstream>
 #include <thread>
@@ -209,17 +208,21 @@ void serverCommand(int serverSocket, char *buffer)
                                     // use of boost::is_any_of() Without the comma it doesn't work on single words
                                     // commands, like QUERYSERVERS
 
-    bool command_is_correct = false;
     std::vector<std::string> tokens;
+    std::string s = toString(buffer, strlen(buffer));
+    std::string delimiter = ",";
+    size_t pos = 0;
     std::string token;
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
 
-    // Split command from client into tokens for parsing
-    boost::split(tokens, buffer, boost::is_any_of(","));
-
+    bool command_is_correct = false;
 
     // Checks if the last token is empty, removes it if true
-    if (tokens.back().size() == 0)
-    {
+    if(tokens.back().size() == 0){
         tokens.pop_back();
     }
 
@@ -404,16 +407,21 @@ void clientCommand(int clientSocket, char *buffer)
                                       // use of boost::is_any_of() Without the comma it doesn't work on single words
                                       // commands, like QUERYSERVERS
 
-    bool command_is_correct = false;
     std::vector<std::string> tokens;
+    std::string s = toString(buffer, strlen(buffer));
+    std::string delimiter = ",";
+    size_t pos = 0;
     std::string token;
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
 
-    // Split command from client into tokens for parsing
-    boost::split(tokens, buffer, boost::is_any_of(","));
+    bool command_is_correct = false;
 
     // Checks if the last token is empty, removes it if true
-    if (tokens.back().size() == 0)
-    {
+    if(tokens.back().size() == 0){
         tokens.pop_back();
     }
 
