@@ -267,6 +267,11 @@ void serverCommand(int serverSocket, char *buffer)
             perror("Failed to send STATUSRESP message to server");
         }
     }
+
+    else if (tokens[0] == "\x01KEEPALIVE") {
+        std::string serv_name = servers[serverSocket]->name;
+        std::cout << tokens[0] << tokens[1] << " from " << serv_name << std::endl;
+    }
 }
 
 
@@ -290,6 +295,8 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
 
     struct hostent *server;
     server = gethostbyname(ip_addr.c_str());
+
+    std::cout << server << std::endl;
 
     bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -340,7 +347,6 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
     own_ip = toString(ip_buf, strlen(ip_buf));
 
-    std::cout << own_ip << std::endl;
 
     // Send the JOIN message to the new server
     std::string group = "\x01JOIN," + MY_GROUP + "\x04";
@@ -546,30 +552,30 @@ int main(int argc, char *argv[])
 
     bool found_client = false;
 
-    while (!found_client) {
+    // while (!found_client) {
 
-        // Get modifiable copy of readSockets
-        readSockets = exceptSockets = openSockets;
+    //     // Get modifiable copy of readSockets
+    //     readSockets = exceptSockets = openSockets;
 
-        // Look at sockets and see which ones have something to be read()
-        int n = select(maxfds + 1, &readSockets, NULL, &exceptSockets, NULL);
+    //     // Look at sockets and see which ones have something to be read()
+    //     int l = select(maxfds + 1, &readSockets, NULL, &exceptSockets, NULL);
 
-        if (FD_ISSET(listenSock, &readSockets))
-            {
-                clientSock = accept(listenSock, (struct sockaddr *)&client,
-                                    &clientLen);
-                printf("accept***\n");
-                // Add new client to the list of open sockets
-                FD_SET(clientSock, &openSockets);
+    //     if (FD_ISSET(listenSock, &readSockets))
+    //         {
+    //             clientSock = accept(listenSock, (struct sockaddr *)&client,
+    //                                 &clientLen);
+    //             printf("accept***\n");
+    //             // Add new client to the list of open sockets
+    //             FD_SET(clientSock, &openSockets);
 
-                // And update the maximum file descriptor
-                maxfds = std::max(maxfds, clientSock);
+    //             // And update the maximum file descriptor
+    //             maxfds = std::max(maxfds, clientSock);
 
-                found_client = true;
+    //             found_client = true;
 
-                printf("Client connected on server: %d\n", clientSock);
-            }
-    }
+    //             printf("Client connected on server: %d\n", clientSock);
+    //         }
+    // }
 
     finished = false;
     while (!finished)
@@ -591,6 +597,7 @@ int main(int argc, char *argv[])
             // First, accept any new connections to the server on the listening socket
             if (FD_ISSET(listenSock, &readSockets))
             {
+                std::cout << "someone wants connect" << std::endl;
                 serverSock = accept(listenSock, (struct sockaddr *)&client,
                                     &clientLen);
                 printf("accepting new server\n");
