@@ -439,6 +439,7 @@ void clientCommand(int clientSocket, char *buffer)
     }
     else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3))
     {
+        std::cout << "in send" << std::endl;
         std::string to_group = tokens[1];
         std::string message_to_send = tokens[2];
 
