@@ -52,7 +52,6 @@
 #include <thread>
 #include <map>
 
-
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
