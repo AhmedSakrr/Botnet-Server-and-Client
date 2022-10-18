@@ -61,7 +61,7 @@
 
 #define BACKLOG 5 // Allowed length of queue of waiting connections
 
-std::string MY_GROUP = "P3_GROUP_79";
+std::string MY_GROUP = "P3_GROUP_69";
 
 // Simple class for handling connections from clients.
 //
@@ -296,13 +296,18 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     struct hostent *server;
     server = gethostbyname(ip_addr.c_str());
 
-    std::cout << server << std::endl;
+    // Need to know the IP address of the server we are connecting to,
+	// stores the IP address in binary form in serv_addr.sin_addr
+	if( inet_pton(AF_INET, ip_addr.c_str(), &serv_addr.sin_addr) <= 0) {
+		perror(" failed to set socket address");
+		exit(0);
+	}
 
-    bzero((char *)&serv_addr, sizeof(serv_addr));
+    // bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,
-          (char *)&serv_addr.sin_addr.s_addr,
-          server->h_length);
+    // bcopy((char *)server->h_addr,
+    //       (char *)&serv_addr.sin_addr.s_addr,
+    //       server->h_length);
     serv_addr.sin_port = htons(atoi(port.c_str()));
 
     connectSock = socket(AF_INET, SOCK_STREAM, 0);
