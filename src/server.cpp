@@ -52,6 +52,7 @@
 #include <thread>
 #include <map>
 
+
 // fix SOCK_NONBLOCK for OSX
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
@@ -86,6 +87,7 @@ public:
 // (indexed on socket no.) sacrificing memory for speed.
 
 std::map<int, Server *> servers; // Lookup table for per Client information
+std::map<std::string, std::vector<std::string>> stored_messages; // Lookup table with waiting messages for each group
 
 char buffer[5000]; // buffer for reading from clients
 
@@ -251,6 +253,19 @@ void serverCommand(int serverSocket, char *buffer)
     else if (tokens[0] == "\x01SERVERS") {
 
     }
+
+    else if (tokens[0] == "\x01STATUSREQ" && tokens.size() == 2) {
+        std::string status_resp = "\x01STATUSRESP," + MY_GROUP + tokens[1] + ",";
+        for (auto const &m : stored_messages) {
+            status_resp.append(m.first);
+            status_resp.append(std::to_string(m.second.size()));
+        }
+        status_resp.append("\x04");
+        if (send(serverSocket, status_resp.c_str(), strlen(status_resp.c_str()), 0) < 0)
+        {
+            perror("Failed to send STATUSRESP message to server");
+        }
+    }
 }
 
 
@@ -317,6 +332,14 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     servers[connectSock] = new Server(serverSock);
     servers[connectSock]->ip_addr = ip_addr;
     servers[connectSock]->portno = port;
+
+    socklen_t own_addr_len = sizeof(own_addr);
+    int fail = getsockname(connectSock, (struct sockaddr*)&own_addr, &own_addr_len);
+    char ip_buf[50];
+    const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
+    own_ip = toString(ip_buf, strlen(ip_buf));
+
+    std::cout << own_ip << std::endl;
 
     // Send the JOIN message to the new server
     std::string group = "\x01JOIN," + MY_GROUP + "\x04";
@@ -386,7 +409,7 @@ void clientCommand(int clientSocket, char *buffer)
 
     if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2))
     {
-        std::string group = tokens[1];
+        std::string group_id = tokens[1];
         std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
         if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
         {
@@ -410,18 +433,7 @@ void clientCommand(int clientSocket, char *buffer)
             }
         }
 
-        if (matched) {
-            std::string sent_msg = "SERVER: Message sent to group\n";
-            if (send(matching_socket, message_to_send.c_str(), strlen(message_to_send.c_str()), 0) < 0)
-            {
-                perror("Failed to send message to group");
-            }
-            if (send(clientSocket, sent_msg.c_str(), strlen(sent_msg.c_str()), 0) < 0)
-            {
-                perror("Failed to send message to client");
-            }
-        }
-        else {
+        if (!matched) {
             std::string no_match = "SERVER: Group not found in active connections\n";
             if (send(clientSocket, no_match.c_str(), strlen(no_match.c_str()), 0) < 0)
             {
@@ -429,7 +441,24 @@ void clientCommand(int clientSocket, char *buffer)
             }
         }
 
-        // TODO: Implement SEND command
+        else {
+            // store message in dictionary for group
+            stored_messages[to_group].push_back(message_to_send);
+
+            // send keepalive with number of messages for that group
+            std::string keepalive_msg = "\x01KEEPALIVE," + std::to_string(stored_messages[to_group].size());
+
+            if (send(matching_socket, keepalive_msg.c_str(), strlen(keepalive_msg.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to group");
+            }
+            std::string sent_msg = "SERVER: Message waiting to be sent to group\n";
+            if (send(clientSocket, sent_msg.c_str(), strlen(sent_msg.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to client");
+            }
+        }
+
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
@@ -513,12 +542,6 @@ int main(int argc, char *argv[])
         FD_SET(listenSock, &openSockets);
         maxfds = listenSock;
     }
-
-    socklen_t own_addr_len = sizeof(own_addr);
-    int fail = getsockname(listenSock, (struct sockaddr*)&own_addr, &own_addr_len);
-    char ip_buf[50];
-    const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
-    own_ip = toString(ip_buf, strlen(ip_buf));
 
     finished = false;
 
