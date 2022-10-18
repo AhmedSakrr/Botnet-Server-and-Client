@@ -99,7 +99,8 @@ std::string own_ip;
 std::string own_port;
 
 int listenSock;       // Socket for connections to server
-int serverSock;       // Socket of connecting client
+int serverSock;       // Socket of connecting servers
+int clientSock;       // Socket of connecting client
 fd_set openSockets;   // Current open sockets
 fd_set readSockets;   // Socket list for select()
 fd_set exceptSockets; // Exception socket list
@@ -528,7 +529,6 @@ int main(int argc, char *argv[])
     printf("Listening on port: %d\n", atoi(argv[1]));
 
     own_port = toString(argv[1], 4);
-    std::cout << own_port << std::endl;
 
     if (listen(listenSock, BACKLOG) < 0)
     {
@@ -543,8 +543,34 @@ int main(int argc, char *argv[])
         maxfds = listenSock;
     }
 
-    finished = false;
+    bool found_client = false;
 
+    while (!found_client) {
+
+        // Get modifiable copy of readSockets
+        readSockets = exceptSockets = openSockets;
+
+        // Look at sockets and see which ones have something to be read()
+        int n = select(maxfds + 1, &readSockets, NULL, &exceptSockets, NULL);
+
+        if (FD_ISSET(listenSock, &readSockets))
+            {
+                clientSock = accept(listenSock, (struct sockaddr *)&client,
+                                    &clientLen);
+                printf("accept***\n");
+                // Add new client to the list of open sockets
+                FD_SET(clientSock, &openSockets);
+
+                // And update the maximum file descriptor
+                maxfds = std::max(maxfds, clientSock);
+
+                found_client = true;
+
+                printf("Client connected on server: %d\n", clientSock);
+            }
+    }
+
+    finished = false;
     while (!finished)
     {
         // Get modifiable copy of readSockets
@@ -583,7 +609,27 @@ int main(int argc, char *argv[])
 
                 printf("Client connected on server: %d\n", serverSock);
             }
-            // Now check for commands from clients
+
+            // First, check for command from client
+            if (FD_ISSET(clientSock, &readSockets)) {
+                memset(buffer, 0, sizeof(buffer));
+                if (recv(clientSock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
+                {
+                    std::cout << "Client disconnected" << std::endl;
+                    exit(0);
+                }
+                // We don't check for -1 (nothing received) because select()
+                // only triggers if there is something on the socket for us.
+                else
+                {
+                    if (strlen(buffer) != 0) {
+                        processMessage(clientSock, buffer);
+                    }
+                    memset(buffer, 0, sizeof(buffer));
+                }
+            }
+
+            // Now check for commands from servers
             std::list<Server *> disconnectedServers;
             for (auto const &pair : servers)
             {

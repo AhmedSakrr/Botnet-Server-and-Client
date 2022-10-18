@@ -29,8 +29,6 @@
 #include <chrono>
 #include <ctime>
 
-#include <iomanip>
-
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
@@ -219,6 +217,11 @@ int main(int argc, char *argv[])
             printf("Failed to open socket to server: %s\n", argv[1]);
             perror("Connect failed: ");
             exit(0);
+        }
+        std::string client_key = "CLIENT";
+        if (send(serverSocket, client_key.c_str(), strlen(client_key.c_str()), 0) < 0)
+        {
+            perror("Failed to send CLIENT key to server");
         }
     }
 
