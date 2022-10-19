@@ -212,7 +212,7 @@ void serverCommand(int serverSocket, char *buffer)
 
     // Incorrect message
     if (tokens[0][0] != SOH) {    
-        if (send(serverSocket, "Incorrect Message", strlen("Incorrect Message")-1, 0) < 0)
+        if (send(serverSocket, "Incorrect Message", strlen("Incorrect Message"), 0) < 0)
         {
             perror("Failed to send message to server");
         }
@@ -251,9 +251,10 @@ void serverCommand(int serverSocket, char *buffer)
 
     else if (tokens[0] == "\x01STATUSREQ" && tokens.size() == 2) {
         std::cout << "STATUSREQ from " << tokens[1] << std::endl;
-        std::string status_resp = "\x01STATUSRESP," + MY_GROUP + tokens[1] + ",";
+        std::string status_resp = "\x01STATUSRESP," + MY_GROUP + "," + tokens[1] + ",";
         for (auto const &m : stored_messages) {
             status_resp.append(m.first);
+            status_resp.append(",");
             status_resp.append(std::to_string(m.second.size()));
         }
         status_resp.append("\x04");
@@ -267,6 +268,32 @@ void serverCommand(int serverSocket, char *buffer)
         std::string serv_name = servers[serverSocket]->name;
         std::string keepalive_msg = "FROM " + serv_name + ": " + tokens[0] + " " + tokens[1];
         std::cout << keepalive_msg << std::endl;
+    }
+
+    else if(tokens[0][0] == SOH && tokens[0].rfind("FETCH_MSGS")!=std::string::npos && tokens.size() == 2) {
+        std::string for_group = tokens[1];
+        std::vector<std::string> stored_messages_for_group = stored_messages[for_group];
+        std::string resp_fetch_msg;
+
+        if (stored_messages_for_group.size() == 0) 
+        {
+            resp_fetch_msg = "\x01No messages for " + for_group + "\x04";
+        } else {
+            resp_fetch_msg = "\x01SEND_MSG," + for_group + "," + MY_GROUP + "," + stored_messages_for_group[0] + "\x04";
+            stored_messages_for_group.erase(stored_messages_for_group.begin());
+        }
+
+        if (send(serverSocket, resp_fetch_msg.c_str(), strlen(resp_fetch_msg.c_str()), 0) < 0)
+        {
+            perror("Failed to send SEND_MSG message to server");
+        }
+    }
+    
+    else {
+        std::cout << tokens[0] << std::endl;
+        if (send(serverSocket, "\x01Unrecognized Message\x04", strlen("\x01Unrecognized Message\x04"), 0) < 0) {
+            perror("Failed to send message to server");
+        }
     }
 }
 
@@ -422,7 +449,7 @@ void clientCommand(int clientSocket, char *buffer)
                 stored_messages_from_group.erase(stored_messages_from_group.begin());
             }
         }
-        // std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+
         if (send(clientSocket, resp_fetch_msg.c_str(), strlen(resp_fetch_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
@@ -457,7 +484,8 @@ void clientCommand(int clientSocket, char *buffer)
             stored_messages[to_group].push_back(message_to_send);
 
             // send keepalive with number of messages for that group
-            std::string keepalive_msg = "\x01KEEPALIVE," + std::to_string(stored_messages[to_group].size());
+            std::string keepalive_msg = "\x01KEEPALIVE," + std::to_string(stored_messages[to_group].size()) + "\x04";
+            std::cout << "sending keepalive" << std::endl;
 
             if (send(matching_socket, keepalive_msg.c_str(), strlen(keepalive_msg.c_str()), 0) < 0)
             {
