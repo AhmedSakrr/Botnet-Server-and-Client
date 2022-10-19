@@ -24,7 +24,6 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <thread>
 #include <map>
 #include <chrono>
 #include <ctime>
@@ -35,7 +34,7 @@ using namespace std;
 
 
 ofstream logfile;
-std::string logfile_path = "log.txt";
+std::string logfile_path = "clientlog.txt";
 
 
 std::string toString(char* a, int size)
@@ -67,6 +66,19 @@ void listenServer(int serverSocket)
         }
         else if (nread > 0)
         {
+            // log the sent message
+
+            // first, get the time
+            auto t = std::time(nullptr);
+            auto tm = *std::localtime(&t);
+
+            // stream into string
+            std::ostringstream oss;
+            oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+            auto time_str = oss.str();
+
+            std::string log_msg = time_str + ": " + toString(buffer, strlen(buffer));
+            logfile << log_msg + "\n";
             printf("%s\n", buffer);
         }
     }
@@ -110,21 +122,6 @@ bool sendClientCommand(int serverSocket, char *buffer)
         // printf("CLIENT: Command SEND recognized\n");
         command_is_correct = true;
 
-        // log the sent message
-
-        // first, get the time
-        auto t = std::time(nullptr);
-        auto tm = *std::localtime(&t);
-
-        // stream into string
-        std::ostringstream oss;
-        oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
-        auto time_str = oss.str();
-
-        std::string log_msg = "SENT TO " + tokens[1] + ": " + tokens[2] + "; (" + time_str + ")";
-        std::cout << log_msg << std::endl;
-        logfile << log_msg + "\n";
-
     }
     else if (tokens[0].compare("QUERYSERVERS") == 0)
     {
@@ -138,6 +135,11 @@ bool sendClientCommand(int serverSocket, char *buffer)
     }
     else if (tokens[0].compare("CLOSE") == 0) {
         logfile.close();
+        if (send(serverSocket, buffer, strlen(buffer), 0) == -1)
+        {
+            perror("CLIENT: send() to server failed: ");
+            return true;
+        }
         exit(0);
     }
     else
@@ -224,7 +226,10 @@ int main(int argc, char *argv[])
             perror("Connect failed: ");
             exit(0);
         }
-        std::string client_key = "CLIENT";
+    }
+    else 
+    {
+        std::string client_key = "CLIENT,";
         if (send(serverSocket, client_key.c_str(), strlen(client_key.c_str()), 0) < 0)
         {
             perror("Failed to send CLIENT key to server");
@@ -232,7 +237,7 @@ int main(int argc, char *argv[])
     }
 
     logfile.open (logfile_path);
-    logfile << "START LOG\n";
+    logfile << "START CLIENT LOG\n";
 
     // Listen and print replies from server
     thread serverThread(listenServer, serverSocket);

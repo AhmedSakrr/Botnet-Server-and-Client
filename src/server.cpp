@@ -26,30 +26,12 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
-#include <map>
-
 #include <unistd.h>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include<iomanip>
 
-#include <stdio.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <string.h>
-#include <algorithm>
-#include <map>
-#include <vector>
-#include <thread>
-#include <iostream>
-#include <sstream>
-#include <thread>
-#include <map>
 
 
 // fix SOCK_NONBLOCK for OSX
@@ -62,6 +44,9 @@
 
 std::string MY_GROUP = "P3_GROUP_79";
 
+std::ofstream logfile;
+std::string logfile_path = "serverlog.txt";
+
 // Simple class for handling connections from clients.
 //
 // Client(int socket) - socket to send/receive traffic from client.
@@ -71,7 +56,7 @@ public:
     int sock;         // socket of client connection
     std::string name; // Limit length of name of client's user
     std::string ip_addr;
-    std::string portno;
+    std::string portno = "-1";
 
     Server(int socket) : sock(socket) {}
 
@@ -94,12 +79,12 @@ char SOH = 0x01;
 char EOT = 0x04;
 
 struct sockaddr_in own_addr;
-std::string own_ip;
+std::string own_ip = "0.0.0.0";
 std::string own_port;
 
 int listenSock;       // Socket for connections to server
 int serverSock;       // Socket of connecting servers
-int clientSock;       // Socket of connecting client
+int clientSock;
 fd_set openSockets;   // Current open sockets
 fd_set readSockets;   // Socket list for select()
 fd_set exceptSockets; // Exception socket list
@@ -243,8 +228,9 @@ void serverCommand(int serverSocket, char *buffer)
         std::string servers_msg = "\x01SERVERS," + MY_GROUP + "," + own_ip + "," + own_port + ";";
         for (auto const &pair : servers) {
             Server *s = pair.second;
-            if (s->name != "client")
+            if (s->name != "client") {
                 servers_msg.append(s->name + "," + s->ip_addr + "," + s->portno + ";");
+            }
         }
         servers_msg.append("\x04");
 
@@ -252,13 +238,20 @@ void serverCommand(int serverSocket, char *buffer)
         {
             perror("Failed to send SERVERS message to server");
         }
+
+        std::cout << "From " << tokens[1] << ": JOIN" << std::endl;
     }
 
     else if (tokens[0] == "\x01SERVERS") {
-
+        std::string servers_msg = "";
+        for (int i = 0; i < tokens.size(); i++) {
+            servers_msg.append(tokens[i]);
+        }
+        std::cout << "From " << tokens[1] << ": " << buffer << std::endl;
     }
 
     else if (tokens[0] == "\x01STATUSREQ" && tokens.size() == 2) {
+        std::cout << "STATUSREQ from " << tokens[1] << std::endl;
         std::string status_resp = "\x01STATUSRESP," + MY_GROUP + tokens[1] + ",";
         for (auto const &m : stored_messages) {
             status_resp.append(m.first);
@@ -273,7 +266,8 @@ void serverCommand(int serverSocket, char *buffer)
 
     else if (tokens[0] == "\x01KEEPALIVE") {
         std::string serv_name = servers[serverSocket]->name;
-        std::cout << tokens[0] << tokens[1] << " from " << serv_name << std::endl;
+        std::string keepalive_msg = "FROM " + serv_name + ": " + tokens[0] + " " + tokens[1];
+        std::cout << keepalive_msg << std::endl;
     }
 }
 
@@ -281,6 +275,11 @@ void serverCommand(int serverSocket, char *buffer)
 // Process command from client on the server
 void connectToServer(std::string ip_addr, std::string port, std::string group_id)
 {
+    if (servers.size() > 17) {
+        if (send(clientSock, "Server list is full", strlen("Server list is full"), 0) < 0) {
+        perror("Failed to send message to client");
+        }
+    }
     // // Check if already connected, then return
     // for (auto const &pair : servers) {
     //     Server *s = pair.second;
@@ -345,15 +344,17 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     maxfds = std::max(maxfds, connectSock);
 
     // create a new Server to store information.
-    servers[connectSock] = new Server(serverSock);
+    servers[connectSock] = new Server(connectSock);
     servers[connectSock]->ip_addr = ip_addr;
     servers[connectSock]->portno = port;
 
-    socklen_t own_addr_len = sizeof(own_addr);
-    int fail = getsockname(connectSock, (struct sockaddr*)&own_addr, &own_addr_len);
-    char ip_buf[50];
-    const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
-    own_ip = toString(ip_buf, strlen(ip_buf));
+    if (own_ip.compare("0.0.0.0") == 0) {
+        socklen_t own_addr_len = sizeof(own_addr);
+        int fail = getsockname(connectSock, (struct sockaddr*)&own_addr, &own_addr_len);
+        char ip_buf[50];
+        const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
+        own_ip = toString(ip_buf, strlen(ip_buf));
+    }
 
 
     // Send the JOIN message to the new server
@@ -364,47 +365,13 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
     {
         perror("Failed to send message to client");
     }
-
-    memset(&buffer, 0, sizeof(buffer));
-
-    // Receive the JOIN message from the server
-    int nread = read(connectSock, buffer, sizeof(buffer));
-
-    if (nread == 0) // Server has dropped us
-    {
-        printf("Over and Out\n");
-        exit(0);
-    }
-    else if (nread > 0)
-    {
-        printf("Server Response: %s\n", buffer);
-        // process the JOIN command and return SERVERS
-        serverCommand(connectSock, buffer);
-    }
-
-
-    // Receive the SERVERS command
-    memset(&buffer, 0, sizeof(buffer));
-    nread = read(connectSock, buffer, sizeof(buffer));
-
-    if (nread == 0) // Server has dropped us
-    {
-        printf("Over and Out\n");
-        exit(0);
-    }
-    else if (nread > 0)
-    {
-        printf("Server Response: %s\n", buffer);
-        serverCommand(connectSock, buffer);
-    }
 }
-
 
 void clientCommand(int clientSocket, char *buffer)
 {
     buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
                                       // that there is always a comma in the buffer. This is needed for the correct
-                                      // use of boost::is_any_of() Without the comma it doesn't work on single words
+                                      // use of boost::is_any_of() Without the comma it doesn't work on single word
                                       // commands, like QUERYSERVERS
 
     std::vector<std::string> tokens;
@@ -439,7 +406,6 @@ void clientCommand(int clientSocket, char *buffer)
     }
     else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3))
     {
-        std::cout << "in send" << std::endl;
         std::string to_group = tokens[1];
         std::string message_to_send = tokens[2];
 
@@ -501,11 +467,22 @@ void clientCommand(int clientSocket, char *buffer)
 
         connectToServer(ip, port, MY_GROUP);
 
-        std::string reply_msg = "SERVER: Command executed by server";
+        std::string reply_msg = "SERVER: Connected to new server";
         if (send(clientSocket, reply_msg.c_str(), strlen(reply_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
         }
+    }
+    else if (tokens[0].compare("CLIENT") == 0) 
+    {
+        servers[clientSocket]->name = "client";
+        servers[clientSocket]->portno = -1;
+        clientSock = clientSocket;
+    }
+    else if (tokens[0].compare("CLOSE") == 0)
+    {
+        logfile.close();
+        exit(0);
     }
     else
     {
@@ -519,13 +496,29 @@ void clientCommand(int clientSocket, char *buffer)
 
 
 void processMessage(int sock, char *buffer) {
+
+    // log the sent message
+
+    // first, get the time
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+
+    // stream into string
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+    auto time_str = oss.str();
+
+
     // server command
     if (buffer[0] == SOH) {
-        std::cout << "server command" << std::endl;
+        std::string log_msg = time_str + ": " + toString(buffer, strlen(buffer));
+        logfile << log_msg + "\n";
         serverCommand(sock, buffer);
     }
     // client command
     else {
+        std::string log_msg = "From Client: " + time_str + ": " + toString(buffer, strlen(buffer));
+        logfile << log_msg + "\n";
         std::cout << "client command: " << buffer << std::endl;
         clientCommand(sock, buffer);
     }
@@ -564,6 +557,9 @@ int main(int argc, char *argv[])
         maxfds = listenSock;
     }
 
+    logfile.open (logfile_path);
+    logfile << "START SERVER LOG\n";
+
     bool found_client = false;
 
     finished = false;
@@ -584,7 +580,8 @@ int main(int argc, char *argv[])
         else
         {
             // First, accept any new connections to the server on the listening socket
-            if (FD_ISSET(listenSock, &readSockets))
+            // we only want 16 connections maximum, but we also have the client in the list
+            if (FD_ISSET(listenSock, &readSockets) && servers.size() < 18)
             {
                 serverSock = accept(listenSock, (struct sockaddr *)&client,
                                     &clientLen);
@@ -598,30 +595,29 @@ int main(int argc, char *argv[])
 
                 // create a new client to store information.
                 servers[serverSock] = new Server(serverSock);
+                servers[serverSock]->portno = "-1";
 
-                servers[serverSock]->name = "client";
+                char ip_str[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &(client.sin_addr), ip_str, INET_ADDRSTRLEN);
+                servers[serverSock]->ip_addr = toString(ip_str, (int) (sizeof(ip_str) / sizeof(char)));
+
+                if (own_ip.compare("0.0.0.0") == 0) {
+                    socklen_t own_addr_len = sizeof(own_addr);
+                    int fail = getsockname(serverSock, (struct sockaddr*)&own_addr, &own_addr_len);
+                    char ip_buf[50];
+                    const char* p = inet_ntop(AF_INET, &own_addr.sin_addr, ip_buf, 50);
+                    own_ip = toString(ip_buf, strlen(ip_buf));
+                }
+
+                // send initial JOIN
+                std::string joined_msg = "\x01JOIN," + MY_GROUP + "\x04";
+                if (send(serverSock, joined_msg.c_str(), strlen(joined_msg.c_str()), 0) < 0)
+                {
+                    perror("Failed to send JOIN message to new server");
+                }
 
                 // Decrement the number of sockets waiting to be dealt with
                 n--;
-            }
-
-            // First, check for command from client
-            if (FD_ISSET(clientSock, &readSockets)) {
-                memset(buffer, 0, sizeof(buffer));
-                if (recv(clientSock, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
-                {
-                    std::cout << "Client disconnected" << std::endl;
-                    exit(0);
-                }
-                // We don't check for -1 (nothing received) because select()
-                // only triggers if there is something on the socket for us.
-                else
-                {
-                    if (strlen(buffer) != 0) {
-                        processMessage(clientSock, buffer);
-                    }
-                    memset(buffer, 0, sizeof(buffer));
-                }
             }
 
             // Now check for commands from servers
@@ -629,6 +625,7 @@ int main(int argc, char *argv[])
             for (auto const &pair : servers)
             {
                 Server *server = pair.second;
+
 
                 if (FD_ISSET(server->sock, &readSockets))
                 {
