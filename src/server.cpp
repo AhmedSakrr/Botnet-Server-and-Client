@@ -71,6 +71,7 @@ public:
 
 std::map<int, Server *> servers; // Lookup table for per Client information
 std::map<std::string, std::vector<std::string>> stored_messages; // Lookup table with waiting messages for each group
+std::map<std::string, std::vector<std::string>> messages_for_client; // Lookup table with messages waiting to be fetched by client
 
 char buffer[5000]; // buffer for reading from clients
 
@@ -270,7 +271,22 @@ void serverCommand(int serverSocket, char *buffer)
         std::cout << keepalive_msg << std::endl;
     }
 
+    else if (tokens[0] == "\x01SEND_MSG") {
+        // the message is for us, send it to client
+        std::cout << "SEND_MSG for " << tokens[1] << " from " << tokens[2] <<  std::endl;
+        if (tokens[1] == MY_GROUP) {
+            std::string msg_to_client = "Received message from " + tokens[2] + ": " + tokens[3];
+            std::cout << msg_to_client << std::endl;
+            // store the message to be sent to client when FETCHED
+            messages_for_client[tokens[2]].push_back(tokens[3]);
+        }
+        else {
+            std::cout << "Got message for other server" << std::endl;
+        }
+    }
+
     else if(tokens[0][0] == SOH && tokens[0].rfind("FETCH_MSGS")!=std::string::npos && tokens.size() == 2) {
+        std::cout << "FETCH_MSGS for " << tokens[1] << " from " << servers[serverSocket]->name <<  std::endl;
         std::string for_group = tokens[1];
         std::vector<std::string> stored_messages_for_group = stored_messages[for_group];
         std::string resp_fetch_msg;
@@ -425,12 +441,14 @@ void clientCommand(int clientSocket, char *buffer)
         std::string group_id = tokens[1];
         std::string resp_fetch_msg;
         bool exists = false;
+        int matching_socket;
 
         // check if name exists
         for (auto const &p: servers) {
             Server *s = p.second;
             if (s->name == group_id && s->name != "client") {
                 exists = true;
+                matching_socket = p.first;
                 break;
             }
         }
@@ -440,14 +458,20 @@ void clientCommand(int clientSocket, char *buffer)
         }
         else
         {
-            std::vector<std::string> stored_messages_from_group = stored_messages[group_id];
-            if (stored_messages_from_group.size() == 0) 
+            std::vector<std::string> messages_from_group = messages_for_client[group_id];
+            if (messages_from_group.size() > 0) 
             {
-                resp_fetch_msg = "SERVER: No messages from " + group_id;
+                resp_fetch_msg = "MESSAGE: " + messages_from_group[0];
+                messages_from_group.erase(messages_from_group.begin());
             } else {
-                resp_fetch_msg = "MESSAGE: " + stored_messages_from_group[0];
-                stored_messages_from_group.erase(stored_messages_from_group.begin());
+                resp_fetch_msg = "SERVER: No messages from " + group_id;
+                std::string fetch_msg_to_server = std::string(1, SOH) + "FETCH_MSGS," + MY_GROUP + "\x01";
+                if (send(matching_socket, fetch_msg_to_server.c_str(), strlen(fetch_msg_to_server.c_str()), 0) < 0)
+                {
+                    perror("Failed to send FETCH_MSGS message to server");
+                }
             }
+            
         }
 
         if (send(clientSocket, resp_fetch_msg.c_str(), strlen(resp_fetch_msg.c_str()), 0) < 0)
