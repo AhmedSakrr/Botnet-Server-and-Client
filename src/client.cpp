@@ -248,8 +248,8 @@ int main(int argc, char *argv[])
         bzero(buffer, sizeof(buffer));
 
         fgets(buffer, sizeof(buffer), stdin);
-
-        finished = sendClientCommand(serverSocket, buffer);
+        if (strlen(buffer) > 0)
+            finished = sendClientCommand(serverSocket, buffer);
     }
 
     logfile.close();
