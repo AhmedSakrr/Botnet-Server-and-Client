@@ -26,7 +26,6 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
-#include <unistd.h>
 #include <fstream>
 #include <chrono>
 #include <ctime>
@@ -397,12 +396,37 @@ void clientCommand(int clientSocket, char *buffer)
     if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2))
     {
         std::string group_id = tokens[1];
-        std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
-        if (send(clientSocket, not_implemented_msg.c_str(), strlen(not_implemented_msg.c_str()), 0) < 0)
+        std::string resp_fetch_msg;
+        bool exists = false;
+
+        // check if name exists
+        for (auto const &p: servers) {
+            Server *s = p.second;
+            if (s->name == group_id && s->name != "client") {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            resp_fetch_msg = "SERVER: Group not found " + group_id;
+        }
+        else
+        {
+            std::vector<std::string> stored_messages_from_group = stored_messages[group_id];
+            if (stored_messages_from_group.size() == 0) 
+            {
+                resp_fetch_msg = "SERVER: No messages from " + group_id;
+            } else {
+                resp_fetch_msg = "MESSAGE: " + stored_messages_from_group[0];
+                stored_messages_from_group.erase(stored_messages_from_group.begin());
+            }
+        }
+        // std::string not_implemented_msg = "SERVER: Command recognized by server\nNot implemented yet\n";
+        if (send(clientSocket, resp_fetch_msg.c_str(), strlen(resp_fetch_msg.c_str()), 0) < 0)
         {
             perror("Failed to send message to client");
         }
-        // TODO: Implement FETCH command
     }
     else if (tokens[0].compare("SEND") == 0 && (tokens.size() == 3))
     {
