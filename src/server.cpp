@@ -420,7 +420,7 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
         if (errno != EINPROGRESS)
         {
             printf("Failed to open socket to server: %s\n", ip_addr.c_str());
-            perror("Connect failed: ");
+            // perror("Connect failed: ");
         }
     }
 
