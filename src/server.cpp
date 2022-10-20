@@ -1,10 +1,3 @@
-//
-// Simple chat server for TSAM-409
-//
-// Command line: ./chat_server 4000
-//
-// Author: Jacky Mallett (jacky@ru.is)
-//
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -79,12 +72,12 @@ char SOH = 0x01;
 char EOT = 0x04;
 
 struct sockaddr_in own_addr;
-std::string own_ip = "0.0.0.0";
+std::string own_ip = "0.0.0.0"; // default for own ip
 std::string own_port;
 
 int listenSock;       // Socket for connections to server
 int serverSock;       // Socket of connecting servers
-int clientSock;
+int clientSock;       // Socket for our client
 fd_set openSockets;   // Current open sockets
 fd_set readSockets;   // Socket list for select()
 fd_set exceptSockets; // Exception socket list
@@ -99,6 +92,46 @@ std::string toString(char* a, int size)
     }
     return s;
 }
+
+// starts a timer, executing the function every interval
+void timer_start(std::function<void(void)> func, unsigned int interval)
+{
+  std::thread([func, interval]()
+  { 
+    while (true)
+    { 
+      auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(interval);
+      func();
+      std::this_thread::sleep_until(x);
+    }
+  }).detach();
+}
+
+// Routine for sending keepalive messages
+void keepaliveRoutine() 
+{
+    for (auto const &pair : servers) {
+        Server *s = pair.second;
+        if (s->name.compare("client") == 0) {
+            continue;
+        }
+        else {
+            std::string keepalive_msg = "\x01KEEPALIVE," + std::to_string(stored_messages[s->name].size()) + "\x04";
+            if (send(pair.first, keepalive_msg.c_str(), strlen(keepalive_msg.c_str()), 0) < 0)
+            {
+                perror("Failed to send message to server");
+            }
+        }
+    }
+}
+
+// start timer and send keepalives every 1.5 minutes
+void keepalivePeriodic()
+{
+    // 1.5 minutes = 90 sec = 90.000 ms
+    timer_start(keepaliveRoutine, 90000);
+}
+
 
 // Open socket for specified port.
 //
@@ -186,6 +219,7 @@ void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
     FD_CLR(clientSocket, openSockets);
 }
 
+// Processing of all commands received by other servers
 void serverCommand(int serverSocket, char *buffer)
 {
     buffer[strlen(buffer) - 1] = ','; // We are adding a comma at the end of the buffer because it guarantees that
@@ -211,7 +245,7 @@ void serverCommand(int serverSocket, char *buffer)
         tokens.pop_back();
     }
 
-    // Incorrect message
+    // Incorrect message because we need a SOH
     if (tokens[0][0] != SOH) {    
         if (send(serverSocket, "Incorrect Message", strlen("Incorrect Message"), 0) < 0)
         {
@@ -223,8 +257,11 @@ void serverCommand(int serverSocket, char *buffer)
         // Here, we have connected to another server, or it has connected to us
         // We want to send all the servers in our servers dictionary
         // starting with ourself
+
+        // we can now set the name of the other group
         servers[serverSocket]->name = tokens[1];
          
+        // build the message
         std::string servers_msg = "\x01SERVERS," + MY_GROUP + "," + own_ip + "," + own_port + ";";
         for (auto const &pair : servers) {
             Server *s = pair.second;
@@ -250,14 +287,24 @@ void serverCommand(int serverSocket, char *buffer)
         std::cout << "From " << tokens[1] << ": " << buffer << std::endl;
     }
 
+    // Someone is requesting our status, we send a STATUSRESP back
     else if (tokens[0] == "\x01STATUSREQ" && tokens.size() == 2) {
         std::cout << "STATUSREQ from " << tokens[1] << std::endl;
         std::string status_resp = "\x01STATUSRESP," + MY_GROUP + "," + tokens[1] + ",";
-        for (auto const &m : stored_messages) {
-            status_resp.append(m.first);
+        for (auto const &p : servers) {
+            Server *s = p.second;
+            std::string s_name = s->name;
+            if (s_name.compare("client") == 0)
+                continue;
+            status_resp.append(s_name);
             status_resp.append(",");
-            status_resp.append(std::to_string(m.second.size()));
+            status_resp.append(std::to_string(stored_messages[s_name].size()));
+            status_resp.append(",");
+
         }
+        // for (auto const &m : stored_messages) {
+        //     status_resp.append(std::to_string(m.second.size()));
+        // }
         status_resp.append("\x04");
         if (send(serverSocket, status_resp.c_str(), strlen(status_resp.c_str()), 0) < 0)
         {
@@ -265,14 +312,16 @@ void serverCommand(int serverSocket, char *buffer)
         }
     }
 
+    // If we get a keepalive, just print it
     else if (tokens[0] == "\x01KEEPALIVE") {
         std::string serv_name = servers[serverSocket]->name;
         std::string keepalive_msg = "FROM " + serv_name + ": " + tokens[0] + " " + tokens[1];
         std::cout << keepalive_msg << std::endl;
     }
 
+    // We have received a message
     else if (tokens[0] == "\x01SEND_MSG") {
-        // the message is for us, send it to client
+        // the message is for us, store it for when client fetches
         std::cout << "SEND_MSG for " << tokens[1] << " from " << tokens[2] <<  std::endl;
         if (tokens[1] == MY_GROUP) {
             std::string msg_to_client = "Received message from " + tokens[2] + ": " + tokens[3];
@@ -281,7 +330,8 @@ void serverCommand(int serverSocket, char *buffer)
             messages_for_client[tokens[2]].push_back(tokens[3]);
         }
         else {
-            std::cout << "Got message for other server" << std::endl;
+            std::cout << "Got message for other server from " << tokens[2] << std::endl;
+            stored_messages[tokens[1]].push_back(tokens[3]);
         }
     }
 
@@ -306,7 +356,7 @@ void serverCommand(int serverSocket, char *buffer)
     }
     
     else {
-        std::cout << tokens[0] << std::endl;
+        std::cout << "Unrecognized Message: " << tokens[0] << std::endl;
         if (send(serverSocket, "\x01Unrecognized Message\x04", strlen("\x01Unrecognized Message\x04"), 0) < 0) {
             perror("Failed to send message to server");
         }
@@ -322,16 +372,6 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
         perror("Failed to send message to client");
         }
     }
-    // // Check if already connected, then return
-    // for (auto const &pair : servers) {
-    //     Server *s = pair.second;
-    //     std::cout << s->ip_addr << std::endl;
-    //     std::cout << s->portno << std::endl;
-    //     if (s->ip_addr.compare(ip_addr) == 0 & s->portno.compare(port) == 0) {
-    //         std::cout << "alrdy" << std::endl;
-    //         return;
-    //     }
-    // }
 
     struct sockaddr_in serv_addr; // Socket address for server
     int connectSock;
@@ -593,9 +633,9 @@ void processMessage(int sock, char *buffer) {
     }
     // client command
     else {
-        std::string log_msg = "From Client: " + time_str + ": " + toString(buffer, strlen(buffer));
+        std::string log_msg = "From Client: " + time_str + ": " + toString(buffer, strlen(buffer)-1);
         logfile << log_msg + "\n";
-        std::cout << "client command: " << buffer << std::endl;
+        std::cout << "client command: " << toString(buffer, strlen(buffer)-1) << std::endl;
         clientCommand(sock, buffer);
     }
 }
@@ -636,7 +676,8 @@ int main(int argc, char *argv[])
     logfile.open (logfile_path);
     logfile << "START SERVER LOG\n";
 
-    bool found_client = false;
+    // Listen and print replies from server
+    std::thread keepaliveThread(keepalivePeriodic);
 
     finished = false;
     while (!finished)
@@ -696,7 +737,7 @@ int main(int argc, char *argv[])
                 n--;
             }
 
-            // Now check for commands from servers
+            // Now check for commands from servers or the client
             std::list<Server *> disconnectedServers;
             for (auto const &pair : servers)
             {
