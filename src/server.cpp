@@ -123,6 +123,7 @@ void keepaliveRoutine()
             }
         }
     }
+    std::cout << "Sending Keepalives" << std::endl;
 }
 
 // start timer and send keepalives every 1.5 minutes
@@ -280,11 +281,8 @@ void serverCommand(int serverSocket, char *buffer)
     }
 
     else if (tokens[0] == "\x01SERVERS") {
-        std::string servers_msg = "";
-        for (int i = 0; i < tokens.size(); i++) {
-            servers_msg.append(tokens[i]);
-        }
-        std::cout << "From " << tokens[1] << ": " << buffer << std::endl;
+        // Don't print the last comma
+        std::cout << "From " << tokens[1] << ": " << toString(buffer, strlen(buffer)-1) << std::endl;
     }
 
     // Someone is requesting our status, we send a STATUSRESP back
@@ -302,9 +300,6 @@ void serverCommand(int serverSocket, char *buffer)
             status_resp.append(",");
 
         }
-        // for (auto const &m : stored_messages) {
-        //     status_resp.append(std::to_string(m.second.size()));
-        // }
         status_resp.append("\x04");
         if (send(serverSocket, status_resp.c_str(), strlen(status_resp.c_str()), 0) < 0)
         {
@@ -312,10 +307,25 @@ void serverCommand(int serverSocket, char *buffer)
         }
     }
 
-    // If we get a keepalive, just print it
+    // If we get a keepalive, print it and store the messages if there are any
     else if (tokens[0] == "\x01KEEPALIVE") {
         std::string serv_name = servers[serverSocket]->name;
         std::string keepalive_msg = "FROM " + serv_name + ": " + tokens[0] + " " + tokens[1];
+
+        // see how many messages there are
+        int num_msgs = stoi(tokens[1]);
+        if (num_msgs > 0) {
+            // store each message
+            std::string fetcher = "\x01";
+            fetcher.append("FETCH_MSGS,");
+            fetcher.append(MY_GROUP);
+            fetcher.append("\x04");
+                
+            if (send(serverSocket, fetcher.c_str(), strlen(fetcher.c_str()), 0) < 0)
+            {
+                perror("Failed to send SEND_MSG message to server");
+            }
+        }
         std::cout << keepalive_msg << std::endl;
     }
 
@@ -331,6 +341,7 @@ void serverCommand(int serverSocket, char *buffer)
         }
         else {
             std::cout << "Got message for other server from " << tokens[2] << std::endl;
+            // we store the message for the other group
             stored_messages[tokens[1]].push_back(tokens[3]);
         }
     }
@@ -338,15 +349,14 @@ void serverCommand(int serverSocket, char *buffer)
     else if(tokens[0][0] == SOH && tokens[0].rfind("FETCH_MSGS")!=std::string::npos && tokens.size() == 2) {
         std::cout << "FETCH_MSGS for " << tokens[1] << " from " << servers[serverSocket]->name <<  std::endl;
         std::string for_group = tokens[1];
-        std::vector<std::string> stored_messages_for_group = stored_messages[for_group];
         std::string resp_fetch_msg;
 
-        if (stored_messages_for_group.size() == 0) 
+        if (stored_messages[for_group].size() == 0) 
         {
             resp_fetch_msg = "\x01No messages for " + for_group + "\x04";
         } else {
-            resp_fetch_msg = "\x01SEND_MSG," + for_group + "," + MY_GROUP + "," + stored_messages_for_group[0] + "\x04";
-            stored_messages_for_group.erase(stored_messages_for_group.begin());
+            resp_fetch_msg = "\x01SEND_MSG," + for_group + "," + MY_GROUP + "," + stored_messages[for_group][0] + "\x04";
+            stored_messages[for_group].erase(stored_messages[for_group].begin());
         }
 
         if (send(serverSocket, resp_fetch_msg.c_str(), strlen(resp_fetch_msg.c_str()), 0) < 0)
@@ -387,11 +397,7 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
 		exit(0);
 	}
 
-    // bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    // bcopy((char *)server->h_addr,
-    //       (char *)&serv_addr.sin_addr.s_addr,
-    //       server->h_length);
     serv_addr.sin_port = htons(atoi(port.c_str()));
 
     connectSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -415,7 +421,6 @@ void connectToServer(std::string ip_addr, std::string port, std::string group_id
         {
             printf("Failed to open socket to server: %s\n", ip_addr.c_str());
             perror("Connect failed: ");
-            exit(0);
         }
     }
 
@@ -498,17 +503,57 @@ void clientCommand(int clientSocket, char *buffer)
         }
         else
         {
-            std::vector<std::string> messages_from_group = messages_for_client[group_id];
-            if (messages_from_group.size() > 0) 
+            if (messages_for_client[group_id].size() > 0) 
             {
-                resp_fetch_msg = "MESSAGE: " + messages_from_group[0];
-                messages_from_group.erase(messages_from_group.begin());
+                resp_fetch_msg = "MESSAGE: " + messages_for_client[group_id][0];
+                messages_for_client[group_id].erase(messages_for_client[group_id].begin());
             } else {
-                resp_fetch_msg = "SERVER: No messages from " + group_id;
-                std::string fetch_msg_to_server = std::string(1, SOH) + "FETCH_MSGS," + MY_GROUP + "\x01";
+                // If there are no messages from that group on the server, we first FETCH
+                std::string fetch_msg_to_server = std::string(1, SOH) + "FETCH_MSGS," + MY_GROUP + "\x04";
                 if (send(matching_socket, fetch_msg_to_server.c_str(), strlen(fetch_msg_to_server.c_str()), 0) < 0)
                 {
                     perror("Failed to send FETCH_MSGS message to server");
+                }
+
+                memset(buffer, 0, sizeof(*buffer));
+                if (recv(matching_socket, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
+                {
+                    std::cout << "Disconnected" << std::endl;
+                }
+                // We don't check for -1 (nothing received) because select()
+                // only triggers if there is something on the socket for us.
+                else
+                {
+                    if (strlen(buffer) != 0) {
+                        // log the received message
+
+                        // first, get the time
+                        auto t = std::time(nullptr);
+                        auto tm = *std::localtime(&t);
+
+                        // stream into string
+                        std::ostringstream oss;
+                        oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+                        auto time_str = oss.str();
+
+
+                        // server command
+                        std::string log_msg = "From Server: " + time_str + ": " + toString(buffer, strlen(buffer));
+                        logfile << log_msg + "\n";
+                        serverCommand(matching_socket, buffer);
+                    }
+                    memset(buffer, 0, sizeof(*buffer));
+                }
+
+                if (messages_for_client[group_id].size() > 0) 
+                {
+                    resp_fetch_msg = "MESSAGE: " + messages_for_client[group_id][0];
+                    std::cout << "found it" << std::endl;
+                    messages_for_client[group_id].erase(messages_for_client[group_id].begin());
+                }
+                else
+                {
+                    resp_fetch_msg = "SERVER: No messages from " + group_id;
                 }
             }
             
@@ -536,20 +581,20 @@ void clientCommand(int clientSocket, char *buffer)
         }
 
         if (!matched) {
-            std::string no_match = "SERVER: Group not found in active connections\n";
+            std::string no_match = "SERVER: Group not found in active connections, storing message for when they connect\n";
             if (send(clientSocket, no_match.c_str(), strlen(no_match.c_str()), 0) < 0)
             {
                 perror("Failed to send message to client");
             }
+            stored_messages[to_group].push_back(message_to_send);
         }
 
         else {
             // store message in dictionary for group
             stored_messages[to_group].push_back(message_to_send);
 
-            // send keepalive with number of messages for that group
+            // send and extra keepalive with number of messages for that group
             std::string keepalive_msg = "\x01KEEPALIVE," + std::to_string(stored_messages[to_group].size()) + "\x04";
-            std::cout << "sending keepalive" << std::endl;
 
             if (send(matching_socket, keepalive_msg.c_str(), strlen(keepalive_msg.c_str()), 0) < 0)
             {
@@ -589,6 +634,8 @@ void clientCommand(int clientSocket, char *buffer)
             perror("Failed to send message to client");
         }
     }
+
+    // This is the keyword the client sends to identify itself
     else if (tokens[0].compare("CLIENT") == 0) 
     {
         servers[clientSocket]->name = "client";
@@ -608,12 +655,13 @@ void clientCommand(int clientSocket, char *buffer)
             perror("Failed to send message to client");
         }
     }
+
 }
 
 
 void processMessage(int sock, char *buffer) {
 
-    // log the sent message
+    // log the received message
 
     // first, get the time
     auto t = std::time(nullptr);
@@ -627,7 +675,7 @@ void processMessage(int sock, char *buffer) {
 
     // server command
     if (buffer[0] == SOH) {
-        std::string log_msg = time_str + ": " + toString(buffer, strlen(buffer));
+        std::string log_msg = "From Server: " + time_str + ": " + toString(buffer, strlen(buffer));
         logfile << log_msg + "\n";
         serverCommand(sock, buffer);
     }

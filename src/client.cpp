@@ -77,7 +77,7 @@ void listenServer(int serverSocket)
             oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
             auto time_str = oss.str();
 
-            std::string log_msg = time_str + ": " + toString(buffer, strlen(buffer));
+            std::string log_msg = "Received: " + time_str + ": " + toString(buffer, strlen(buffer));
             logfile << log_msg + "\n";
             printf("%s\n", buffer);
         }
@@ -109,9 +109,6 @@ bool sendClientCommand(int serverSocket, char *buffer)
         tokens.pop_back();
     }
 
-    // Groups should use the syntax P3_GROUP_n where "n" is your group number
-    string group_prefix = "P3_GROUP_";
-
     if ((tokens[0].compare("FETCH") == 0) && (tokens.size() == 2)) 
     {
         // printf("CLIENT: Command FETCH recognized\n");
@@ -133,6 +130,7 @@ bool sendClientCommand(int serverSocket, char *buffer)
         // printf("CLIENT: Command CONNECT recognized\n");
         command_is_correct = true;
     }
+    // Close the server using CLOSE so we can close the logfile properly
     else if (tokens[0].compare("CLOSE") == 0) {
         logfile.close();
         if (send(serverSocket, buffer, strlen(buffer), 0) == -1)
@@ -140,6 +138,20 @@ bool sendClientCommand(int serverSocket, char *buffer)
             perror("CLIENT: send() to server failed: ");
             return true;
         }
+        
+        // first, get the time
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+
+        // stream into string
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+        auto time_str = oss.str();
+
+        std::string log_msg = "Sent: " + time_str + ": " + toString(buffer, strlen(buffer)-1);
+        logfile << log_msg + "\n";
+        return false;
+
         exit(0);
     }
     else
@@ -154,6 +166,19 @@ bool sendClientCommand(int serverSocket, char *buffer)
             perror("CLIENT: send() to server failed: ");
             return true;
         }
+        // log the sent message
+
+        // first, get the time
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+
+        // stream into string
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+        auto time_str = oss.str();
+
+        std::string log_msg = "Sent: " + time_str + ": " + toString(buffer, strlen(buffer)-1);
+        logfile << log_msg + "\n";
         return false;
     }
 
@@ -229,6 +254,7 @@ int main(int argc, char *argv[])
     }
     else 
     {
+        // This is the keyword the client sends to identify itself
         std::string client_key = "CLIENT,";
         if (send(serverSocket, client_key.c_str(), strlen(client_key.c_str()), 0) < 0)
         {
@@ -236,6 +262,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    // start logging
     logfile.open (logfile_path);
     logfile << "START CLIENT LOG\n";
 

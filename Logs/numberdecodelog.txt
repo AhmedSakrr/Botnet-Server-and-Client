@@ -1,0 +1,39 @@
+START CLIENT LOG
+Received: 20-10-2022 15:08:43: JOIN,P3_GROUP_79
+Sent: 20-10-2022 15:08:51: CONNECT,130.208.243.61,4005
+Received: 20-10-2022 15:08:51: SERVER: Connected to new server
+Sent: 20-10-2022 15:08:59: SEND,NUMBER,hellooo
+Received: 20-10-2022 15:08:59: SERVER: Message waiting to be sent to group
+
+Sent: 20-10-2022 15:09:09: SEND,NUMBER,give a message
+Received: 20-10-2022 15:09:09: SERVER: Message waiting to be sent to group
+
+Sent: 20-10-2022 15:09:53: FETCH,NUMBER
+Received: 20-10-2022 15:09:53: MESSAGE: 
+c13d88cb4cb02003daedb8a84e5d272a
+Sent: 20-10-2022 15:10:00: QUERYSERVERS
+Received: 20-10-2022 15:10:00: SERVERS,P3_GROUP_79,127.0.0.1,4001;NUMBER,130.208.243.61,4005;
+
+------------------------
+
+START SERVER LOG
+From Client: 20-10-2022 15:08:43: CLIENT
+From Client: 20-10-2022 15:08:51: CONNECT,130.208.243.61,4005
+From Server: 20-10-2022 15:08:51: JOIN,NUMBER
+From Server: 20-10-2022 15:08:51: SERVERS,NUMBER,130.208.243.61,4005;ORACLE,130.208.243.61,4004;P3_GROUP_79,10.6.26.40,-1;Instr_7,130.208.243.61,4007;
+From Client: 20-10-2022 15:08:59: SEND,NUMBER,hellooo
+From Server: 20-10-2022 15:08:59: FETCH_MSGS,NUMBER
+From Client: 20-10-2022 15:09:09: SEND,NUMBER,give a message
+From Server: 20-10-2022 15:09:09: FETCH_MSGS,NUMBER
+From Server: 20-10-2022 15:09:41: KEEPALIVE,0
+From Server: 20-10-2022 15:09:41: SEND_MSG,P3_GROUP_79,NUMBER,
+c13d88cb4cb02003daedb8a84e5d272a
+From Client: 20-10-2022 15:09:53: FETCH,NUMBER
+From Client: 20-10-2022 15:10:00: QUERYSERVERS
+From Client: 20-10-2022 15:10:25: CLOSE
+
+
+---------------------------
+
+The message is 'c13d88cb4cb02003daedb8a84e5d272a'
+Decoded, this message is 'stuff'
