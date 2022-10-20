@@ -1,3 +1,17 @@
+START CLIENT LOG
+Received: 20-10-2022 14:51:13: JOIN,P3_GROUP_79
+Sent: 20-10-2022 14:51:22: CONNECT,130.208.243.61,4042
+Received: 20-10-2022 14:51:22: SERVER: Connected to new server
+Sent: 20-10-2022 14:51:42: SEND,P3_GROUP_42,Bibidiboo
+Received: 20-10-2022 14:51:42: SERVER: Message waiting to be sent to group
+
+Sent: 20-10-2022 14:52:49: FETCH,P3_GROUP_42
+Received: 20-10-2022 14:52:49: MESSAGE: Bibidibap
+Sent: 20-10-2022 14:53:04: QUERYSERVERS
+Received: 20-10-2022 14:53:04: SERVERS,P3_GROUP_79,127.0.0.1,4001;
+
+-----------------------------
+
 START SERVER LOG
 From Client: 20-10-2022 14:51:13: CLIENT
 From Client: 20-10-2022 14:51:22: CONNECT,130.208.243.61,4042
