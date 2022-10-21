@@ -37,3 +37,8 @@ From Client: 20-10-2022 15:10:25: CLOSE
 
 The message is 'c13d88cb4cb02003daedb8a84e5d272a'
 Decoded, this message is 'stuff'
+
+--------------------------- 
+Other messages from NUMBER:
+21582c6c30be1217322cdb9aebaf4a59 - 'that'
+c13d88cb4cb02003daedb8a84e5d272a - 'stuff'

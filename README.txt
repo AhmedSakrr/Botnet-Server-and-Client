@@ -35,9 +35,11 @@ IP: 130.208.243.61
 CONNECT,130.208.243.61,4002
 
 
----- DONT DELETE UNDERNEATH HERE -----
+---- DONT DELETE UNDERNEATH HERE!!!!!-----
 
-Instructions:
+------------- INSTRUCTIONS ---------------
+
+We run the client and server using a Makefile
 - To start the server on linux run: make server_linux && ./bin/tsamgroup79 <PORT>
 - To start the server on mac run: make server_mac && ./bin/tsamgroup79 <PORT>
 
@@ -50,9 +52,38 @@ The Client can send the following commands to the server via terminal:
     - SEND,<GROUP>,<MSG>
     - FETCH,<GROUP>
     - CLOSE (close client & server)
+The client also immediately sends 'CLIENT' to the server to indicate it is the client
+
+The server sends keepalives to all connected servers every 90 seconds
+If the server receives a keepalive with more than 0 messages waiting, 
+it fetches the messages using FETCH_MSGS
+
+The client can use FETCH_MSG to get it's waiting messages
+If the client sends a SEND_MSG, the relevant server will be notified with its next KEEPALIVE
+
+All log files have a log for both the client and the server (indicated by SERVER LOG and CLIENT LOG)
+The client records all commands it sends to the server and responses it gets
+The server records all things it receives from other sources
 
 
------ BONUS ------
+---------------- FILES & ASSIGNMENTS ------------------
+
+Part 2:
+    The file 'server_client_trace.pcap' shows a wireshark trace for all commands from client to server
+    This includes all the required commands, but also some extra commands we added such as CONNECT and CLIENT
+
+Part 3:
+    The file 'instr_conn_log.txt' shows a successful connection to Instr_2 and Instr_6 (see the JOIN and SERVERS)
+    The client also sends a QUERYSERVERS to show the listed servers
+
+Part 4 & 5:
+    The file 'send_reply_log_1.txt' shows a connection made to Group 42.
+    It shows a message sent from the client to Group 42 and a message successfully received from Group 42.
+
+    ...
+
+
+----------------- BONUS --------------------
 
 - We should have received 5 points for the presubmission
 
